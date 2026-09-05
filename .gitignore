@@ -1,0 +1,14 @@
+# Temporary & editor files
+*~
+*.swp
+*.swo
+*.bak
+*.orig
+.DS_Store
+
+# Scryer & Prolog artifacts
+*.qlf
+*.so
+*.dylib
+*.dll
+target/

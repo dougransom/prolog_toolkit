@@ -1,0 +1,3 @@
+[submodule "reference/scryer-prolog"]
+	path = reference/scryer-prolog
+	url = https://github.com/mthom/scryer-prolog

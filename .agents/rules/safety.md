@@ -1,0 +1,1 @@
+/home/doug/code/prolog-agent-toolkit/.agents/rules/safety.md

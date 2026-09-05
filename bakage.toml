@@ -1,0 +1,11 @@
+[package]
+name = "prolog_toolkit"
+version = "0.1.0.dev1"
+authors = ["Doug Ransom"]
+description = "Pure Scryer Prolog lexical and syntactic analysis toolkit for the Prolog language"
+license = "Unlicense"
+
+[dependencies]
+# NOTE: parser_experiments will eventually be imported as a bakage package:
+# parser_experiments = { git = "https://github.com/..." }
+# For now, it is referenced locally via relative file paths and imports will be refactored later.
