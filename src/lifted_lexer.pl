@@ -31,7 +31,8 @@ Runs directly on the annotated stream ([annot/5]).
 ]).
 :- use_module('../../parser_experiments/src/annotate_position', [
     init_position_state/2,
-    annotate_position_pos/2
+    annotate_position_pos/2,
+    advance_pos/3
 ]).
 :- use_module('../../parser_experiments/src/dcg_annotator', [
     dcg_node_rule/2,
@@ -40,7 +41,6 @@ Runs directly on the annotated stream ([annot/5]).
     consumed_last/3
 ]).
 :- use_module(token).
-:- use_module(position).
 :- use_module(lexer_regex, [digits_to_int/3]).
 :- use_module(lexer_rules, [
     grammar_rule/2,

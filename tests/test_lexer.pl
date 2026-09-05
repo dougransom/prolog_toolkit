@@ -14,7 +14,7 @@ Tests Ported from Scryer Prolog reference:
 :- use_module(library(iso_ext), [maplist/3]).
 :- use_module(library(reif)).
 :- use_module('../src/token').
-:- use_module('../src/position').
+:- use_module('../../parser_experiments/src/annotate_position').
 :- use_module('../src/lexer').
 :- use_module('../src/streaming_lexer').
 

@@ -74,7 +74,16 @@
 :- use_module(library(si)).
 
 :- use_module(token).
-:- use_module(position).
+:- use_module('../../parser_experiments/src/annotate_position', [
+    pos_line/2,
+    pos_col/2,
+    pos_offset/2,
+    pos_source/2,
+    span_start/2,
+    span_end/2,
+    combine_spans/3,
+    advance_pos/3
+]).
 :- use_module(lexer).
 :- use_module(streaming_lexer).
 
