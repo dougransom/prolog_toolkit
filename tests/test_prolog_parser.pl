@@ -1,4 +1,4 @@
-:- module(test_iso_parser, [
+:- module(test_prolog_parser, [
     run/0
 ]).
 
@@ -9,24 +9,24 @@
 :- use_module(testing).
 
 test("parse plain atom and integers", (
-    default_operator_table(OpT),
-    phrase(tokens(Toks), "point(10, 20)."),
-    phrase(parse_clause(OpT, Stmt, _), Toks),
+    prolog_default_operator_table(OpT),
+    phrase(prolog_tokens(Toks), "point(10, 20)."),
+    phrase(prolog_parse_clause(OpT, Stmt, _), Toks),
     Stmt = clause(point(10, 20), Meta),
     nonvar(Meta)
 )).
 
 test("parse quoted atom and string", (
-    default_operator_table(OpT),
-    phrase(tokens(Toks), "msg('hello world', \"sample text\")."),
-    phrase(parse_clause(OpT, Stmt, _), Toks),
+    prolog_default_operator_table(OpT),
+    phrase(prolog_tokens(Toks), "msg('hello world', \"sample text\")."),
+    phrase(prolog_parse_clause(OpT, Stmt, _), Toks),
     Stmt = clause(msg('hello world', "sample text"), _)
 )).
 
 test("parse solo character atoms cut and semicolon", (
-    default_operator_table(OpT),
-    phrase(tokens(Toks), "step :- !, (a ; b)."),
-    phrase(parse_clause(OpT, Stmt, _), Toks),
+    prolog_default_operator_table(OpT),
+    phrase(prolog_tokens(Toks), "step :- !, (a ; b)."),
+    phrase(prolog_parse_clause(OpT, Stmt, _), Toks),
     Stmt = clause((step :- !, (a ; b)), _)
 )).
 
@@ -81,12 +81,12 @@ test("variable tracking: names, singletons, variables", (
 )).
 
 test("dynamic operator declaration in program parse", (
-    default_operator_table(OpT),
-    phrase(tokens(Toks), ":- op(700, xfx, <=>). alpha <=> beta."),
-    phrase(parse_program(OpT, Stmts, FinalOpT), Toks),
+    prolog_default_operator_table(OpT),
+    phrase(prolog_tokens(Toks), ":- op(700, xfx, <=>). alpha <=> beta."),
+    phrase(prolog_parse_program(OpT, Stmts, FinalOpT), Toks),
     Stmts = [directive(op(700, xfx, <=>), _), clause(Term, _)],
     Term =.. ['<=>', alpha, beta],
-    is_operator(FinalOpT, '<=>', 700, xfx)
+    prolog_is_operator(FinalOpT, '<=>', 700, xfx)
 )).
 
 test("term_io: iso_read_term_from_chars and iso_write_canonical", (

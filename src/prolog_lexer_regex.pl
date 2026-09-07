@@ -1,4 +1,17 @@
-:- module(lexer_regex, [
+:- module(prolog_lexer_regex, [
+    % Canonical Prolog Lexer Regex API
+    prolog_var_re_match/3,
+    prolog_name_atom_re_match/3,
+    prolog_graphic_atom_re_match/3,
+    prolog_hex_int_re_match/4,
+    prolog_oct_int_re_match/4,
+    prolog_bin_int_re_match/4,
+    prolog_dec_int_re_match/3,
+    prolog_float_re_match/3,
+    prolog_layout_re_match/3,
+    prolog_digits_to_int/3,
+
+    % Backward-compatibility aliases
     var_re_match/3,
     name_atom_re_match/3,
     graphic_atom_re_match/3,
@@ -92,3 +105,15 @@ char_code_digit(Code, V) :-
 char_code_digit(Code, V) :-
     Code in 0'A..0'Z,
     V #= Code - 0'A + 10.
+
+%% Canonical prolog_* predicate definitions
+prolog_var_re_match(Input, Match, Rest) :- var_re_match(Input, Match, Rest).
+prolog_name_atom_re_match(Input, Match, Rest) :- name_atom_re_match(Input, Match, Rest).
+prolog_graphic_atom_re_match(Input, Match, Rest) :- graphic_atom_re_match(Input, Match, Rest).
+prolog_hex_int_re_match(Input, Match, Digits, Rest) :- hex_int_re_match(Input, Match, Digits, Rest).
+prolog_oct_int_re_match(Input, Match, Digits, Rest) :- oct_int_re_match(Input, Match, Digits, Rest).
+prolog_bin_int_re_match(Input, Match, Digits, Rest) :- bin_int_re_match(Input, Match, Digits, Rest).
+prolog_dec_int_re_match(Input, Match, Rest) :- dec_int_re_match(Input, Match, Rest).
+prolog_float_re_match(Input, Match, Rest) :- float_re_match(Input, Match, Rest).
+prolog_layout_re_match(Input, Match, Rest) :- layout_re_match(Input, Match, Rest).
+prolog_digits_to_int(Digits, Base, Value) :- digits_to_int(Digits, Base, Value).

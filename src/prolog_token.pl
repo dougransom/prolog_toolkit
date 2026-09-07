@@ -1,4 +1,12 @@
-:- module(token, [
+:- module(prolog_token, [
+    % Canonical Prolog Token API
+    prolog_token_type/2,
+    prolog_token_value/2,
+    prolog_token_span/2,
+    prolog_lift_token/3,
+    prolog_unlift_token/2,
+
+    % Backward-compatibility aliases
     token_type/2,
     token_value/2,
     token_span/2,
@@ -151,3 +159,10 @@ token_span(comma(S), S).
 token_span(bar(S), S).
 token_span(end(S), S).
 token_span(comment(_, _, S), S).
+
+%% Canonical prolog_* predicate definitions
+prolog_token_type(Tok, Type) :- token_type(Tok, Type).
+prolog_token_value(Tok, Val) :- token_value(Tok, Val).
+prolog_token_span(Tok, Span) :- token_span(Tok, Span).
+prolog_lift_token(Unlifted, Span, Lifted) :- lift_token(Unlifted, Span, Lifted).
+prolog_unlift_token(Lifted, Unlifted) :- unlift_token(Lifted, Unlifted).

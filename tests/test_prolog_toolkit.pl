@@ -82,6 +82,30 @@ test("unlifted_tokenize convenience wrapper", (
     unlifted_tokenize("baz.", [atom("baz"), end])
 )).
 
+test("canonical prolog_* lexer predicates", (
+    prolog_tokenize([], "parent(alice, bob).", Tokens),
+    Tokens = [atom("parent", _), open_ct(_), atom("alice", _), comma(_), atom("bob", _), close(_), end(_)],
+    prolog_token_value(atom("parent", _), "parent"),
+    prolog_token_type(open_ct(_), open_ct),
+    prolog_clause_tokens([], ClauseToks, "a. b.", Rest),
+    ClauseToks = [atom("a", _), end(_)],
+    dif(Rest, []),
+    phrase(prolog_tokens(_Toks), "x + 1."),
+    phrase(prolog_lazy_tokens(LazyToks), "y - 2."),
+    LazyToks = [atom("y", _)|_],
+    phrase(prolog_unlifted_tokens(UnliftedToks), "z."),
+    UnliftedToks = [atom("z"), end],
+    prolog_unlifted_tokenize("ok.", [atom("ok"), end])
+)).
+
+test("canonical prolog_* parser and operator table predicates", (
+    prolog_default_operator_table(OpTable),
+    prolog_is_operator(OpTable, ":-", 1200, xfx),
+    phrase(prolog_tokens(Tokens), "member(X, [1, 2])."),
+    phrase(prolog_parse_clause(OpTable, Stmt, _), Tokens),
+    Stmt = clause(member(_X, [1, 2]), _)
+)).
+
 run :-
     run_tests,
     halt.

@@ -25,10 +25,10 @@
 :- use_module(library(reif)).
 :- use_module(library(si)).
 
-:- use_module(token).
-:- use_module(lexer).
-:- use_module(operator_table).
-:- use_module(iso_parser).
+:- use_module(prolog_token).
+:- use_module(prolog_lexer).
+:- use_module(prolog_operator_table).
+:- use_module(prolog_parser).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    read_term_from_chars/2,3

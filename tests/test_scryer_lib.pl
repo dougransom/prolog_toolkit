@@ -9,10 +9,10 @@
 :- use_module(library(iso_ext), [maplist/3]).
 :- use_module(library(lists)).
 :- use_module(library(terms)).
-:- use_module('../src/token').
-:- use_module('../src/lexer').
-:- use_module('../src/operator_table').
-:- use_module('../src/iso_parser').
+:- use_module('../src/prolog_token').
+:- use_module('../src/prolog_lexer').
+:- use_module('../src/prolog_operator_table').
+:- use_module('../src/prolog_parser').
 :- use_module(testing).
 
 native_read_all(Stream, Terms) :-

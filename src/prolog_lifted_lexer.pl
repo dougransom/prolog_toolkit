@@ -1,4 +1,17 @@
-:- module(lifted_lexer, [
+:- module(prolog_lifted_lexer, [
+    % Canonical Prolog Lifted Lexer API
+    prolog_lifted_tokens//1,
+    prolog_lifted_tokens//2,
+    prolog_lifted_clause_tokens//1,
+    prolog_lifted_clause_tokens//2,
+    prolog_lifted_token//1,
+    prolog_lifted_token//2,
+    prolog_lifted_tokenize/2,
+    prolog_lifted_tokenize/3,
+    prolog_annotated_skip_layout/6,
+    prolog_annotated_scan_single_token/5,
+
+    % Backward-compatibility aliases
     lifted_tokens//1,
     lifted_tokens//2,
     lifted_clause_tokens//1,
@@ -14,7 +27,7 @@
 /** <module> Lifted DCG Lexical Analyzer
 
 Tokenizes character streams into lifted tokens with source spans.
-Derives annotated DCG rules from lexer_rules:grammar_rule/2 using
+Derives annotated DCG rules from prolog_lexer_rules:grammar_rule/2 using
 parser_experiments:dcg_annotator (dcg_node_rule/2 and dcg_helper_rule/2).
 Runs directly on the annotated stream ([annot/5]).
 */
@@ -40,9 +53,9 @@ Runs directly on the annotated stream ([annot/5]).
     span//2,
     consumed_last/3
 ]).
-:- use_module(token).
-:- use_module(lexer_regex, [digits_to_int/3]).
-:- use_module(lexer_rules, [
+:- use_module(prolog_token).
+:- use_module(prolog_lexer_regex, [digits_to_int/3, prolog_digits_to_int/3]).
+:- use_module(prolog_lexer_rules, [
     grammar_rule/2,
     char_to_esc/2,
     is_graphic_char/1
@@ -226,3 +239,17 @@ half_open_span(span(StartPos, LastItemPos), StreamIn, StreamOut, span(StartPos, 
 annotated_stream_to_chars([], []).
 annotated_stream_to_chars([annot(C, _, _, _, _)|Rest], [C|CharsRest]) :-
     annotated_stream_to_chars(Rest, CharsRest).
+
+%% Canonical prolog_* predicate definitions
+prolog_lifted_tokens(Tokens) --> lifted_tokens(Tokens).
+prolog_lifted_tokens(Options, Tokens) --> lifted_tokens(Options, Tokens).
+prolog_lifted_clause_tokens(Tokens) --> lifted_clause_tokens(Tokens).
+prolog_lifted_clause_tokens(Options, Tokens) --> lifted_clause_tokens(Options, Tokens).
+prolog_lifted_token(Token) --> lifted_token(Token).
+prolog_lifted_token(Options, Token) --> lifted_token(Options, Token).
+prolog_lifted_tokenize(Chars, Tokens) :- lifted_tokenize(Chars, Tokens).
+prolog_lifted_tokenize(Options, Chars, Tokens) :- lifted_tokenize(Options, Chars, Tokens).
+prolog_annotated_skip_layout(In, LayoutBefore0, Options, Out, LayoutBeforeOut, Comments) :-
+    annotated_skip_layout(In, LayoutBefore0, Options, Out, LayoutBeforeOut, Comments).
+prolog_annotated_scan_single_token(LayoutBefore, Options, Token, StreamIn, StreamOut) :-
+    annotated_scan_single_token(LayoutBefore, Options, Token, StreamIn, StreamOut).

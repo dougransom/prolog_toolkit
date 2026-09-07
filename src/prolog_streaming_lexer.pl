@@ -1,4 +1,11 @@
-:- module(streaming_lexer, [
+:- module(prolog_streaming_lexer, [
+    % Canonical Prolog Streaming Lexer API
+    prolog_lazy_tokens//1,
+    prolog_lazy_tokens//2,
+    prolog_lazy_tokenize/2,
+    prolog_lazy_tokenize/3,
+
+    % Backward-compatibility aliases
     lazy_tokens//1,
     lazy_tokens//2,
     lazy_tokenize/2,
@@ -21,7 +28,7 @@ Uses the lifted lexer rules to produce tokens with source spans as demanded.
 :- use_module('../../parser_experiments/src/annotate_position', [
     init_position_state/2
 ]).
-:- use_module(lifted_lexer, [
+:- use_module(prolog_lifted_lexer, [
     annotated_skip_layout/6,
     annotated_scan_single_token/5
 ]).
@@ -58,3 +65,9 @@ lazy_annotated_tokens_step([Item|RestItems], LayoutBefore0, Options, Tokens) :-
           freeze(Tail, lazy_annotated_tokens_step(RestStream, false, Options, Tail))
         )
     ).
+
+%% Canonical prolog_* predicate definitions
+prolog_lazy_tokens(Tokens) --> lazy_tokens(Tokens).
+prolog_lazy_tokens(Options, Tokens) --> lazy_tokens(Options, Tokens).
+prolog_lazy_tokenize(Chars, Tokens) :- lazy_tokenize(Chars, Tokens).
+prolog_lazy_tokenize(Options, Chars, Tokens) :- lazy_tokenize(Options, Chars, Tokens).

@@ -1,4 +1,17 @@
-:- module(unlifted_lexer, [
+:- module(prolog_unlifted_lexer, [
+    % Canonical Prolog Unlifted Lexer API
+    prolog_unlifted_tokens//1,
+    prolog_unlifted_tokens//2,
+    prolog_unlifted_clause_tokens//1,
+    prolog_unlifted_clause_tokens//2,
+    prolog_unlifted_token//1,
+    prolog_unlifted_token//2,
+    prolog_unlifted_tokenize/2,
+    prolog_unlifted_tokenize/3,
+    prolog_unlifted_scan_token/5,
+    prolog_unlifted_skip_layout/6,
+
+    % Backward-compatibility aliases
     unlifted_tokens//1,
     unlifted_tokens//2,
     unlifted_clause_tokens//1,
@@ -15,7 +28,7 @@
 
 Tokenizes plain character streams into unlifted tokens (tokens without source spans).
 Operates purely on [char] without any coordinate or position tracking.
-Derives DCG rules from lexer_rules:grammar_rule/2.
+Derives DCG rules from prolog_lexer_rules:grammar_rule/2.
 */
 
 :- use_module(library(charsio)).
@@ -24,9 +37,9 @@ Derives DCG rules from lexer_rules:grammar_rule/2.
 :- use_module(library(dif)).
 :- use_module(library(lists), [append/2, append/3, member/2]).
 :- use_module(library(reif)).
-:- use_module(token).
-:- use_module(lexer_regex, [digits_to_int/3]).
-:- use_module(lexer_rules, [
+:- use_module(prolog_token).
+:- use_module(prolog_lexer_regex, [digits_to_int/3, prolog_digits_to_int/3]).
+:- use_module(prolog_lexer_rules, [
     grammar_rule/2,
     char_to_esc/2,
     is_graphic_char/1
@@ -165,3 +178,17 @@ unlifted_scan_token(LayoutBefore, _Options, Token, CharsIn, CharsOut) :-
         phrase(scan_paren(Token), CharsIn, CharsOut)
     ;   phrase(scan_token(Token), CharsIn, CharsOut)
     ).
+
+%% Canonical prolog_* predicate definitions
+prolog_unlifted_tokens(Tokens) --> unlifted_tokens(Tokens).
+prolog_unlifted_tokens(Options, Tokens) --> unlifted_tokens(Options, Tokens).
+prolog_unlifted_clause_tokens(Tokens) --> unlifted_clause_tokens(Tokens).
+prolog_unlifted_clause_tokens(Options, Tokens) --> unlifted_clause_tokens(Options, Tokens).
+prolog_unlifted_token(Token) --> unlifted_token(Token).
+prolog_unlifted_token(Options, Token) --> unlifted_token(Options, Token).
+prolog_unlifted_tokenize(Chars, Tokens) :- unlifted_tokenize(Chars, Tokens).
+prolog_unlifted_tokenize(Options, Chars, Tokens) :- unlifted_tokenize(Options, Chars, Tokens).
+prolog_unlifted_scan_token(LayoutBefore, Options, Token, CharsIn, CharsOut) :-
+    unlifted_scan_token(LayoutBefore, Options, Token, CharsIn, CharsOut).
+prolog_unlifted_skip_layout(In, LayoutBefore0, Options, Out, LayoutBeforeOut, Comments) :-
+    unlifted_skip_layout(In, LayoutBefore0, Options, Out, LayoutBeforeOut, Comments).

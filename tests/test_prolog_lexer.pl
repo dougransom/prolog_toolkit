@@ -1,8 +1,8 @@
-:- module(test_lexer, [
+:- module(test_prolog_lexer, [
     run_tests/0
 ]).
 
-/** <module> Lexer Unit Tests Matching Scryer parse_tokens.rs & ISO
+/** <module> Prolog Lexer Unit Tests Matching Scryer parse_tokens.rs & ISO
 
 Tests Ported from Scryer Prolog reference:
   reference/scryer-prolog/src/tests/parse_tokens.rs
@@ -13,10 +13,10 @@ Tests Ported from Scryer Prolog reference:
 :- use_module(library(format)).
 :- use_module(library(iso_ext), [maplist/3]).
 :- use_module(library(reif)).
-:- use_module('../src/token').
+:- use_module('../src/prolog_token').
 :- use_module('../../parser_experiments/src/annotate_position').
-:- use_module('../src/lexer').
-:- use_module('../src/streaming_lexer').
+:- use_module('../src/prolog_lexer').
+:- use_module('../src/prolog_streaming_lexer').
 
 run_tests :-
     format("Running lexer tests...~n", []),

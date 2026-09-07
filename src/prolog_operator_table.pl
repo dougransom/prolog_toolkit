@@ -5,7 +5,17 @@
    scoping and dynamic operator declarations (op/3).
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
-:- module(operator_table, [
+:- module(prolog_operator_table, [
+    % Canonical Prolog Operator Table API
+    prolog_default_operator_table/1,
+    prolog_add_operator/5,
+    prolog_lookup_infix_op/6,
+    prolog_lookup_prefix_op/5,
+    prolog_lookup_postfix_op/5,
+    prolog_is_operator/4,
+    prolog_op_chars/2,
+
+    % Backward-compatibility aliases
     default_operator_table/1,
     add_operator/5,
     lookup_infix_op/6,
@@ -165,3 +175,16 @@ postfix_fixity_precedence(yf, Prec, Prec).
 is_operator(op_table(Ops), OpName, Prec, Fixity) :-
     member(op(Prec, Fixity, Chars), Ops),
     op_chars(OpName, Chars).
+
+%% Canonical prolog_* predicate definitions
+prolog_default_operator_table(OpTable) :- default_operator_table(OpTable).
+prolog_add_operator(T0, Prec, Fixity, Name, T1) :- add_operator(T0, Prec, Fixity, Name, T1).
+prolog_lookup_infix_op(Table, OpName, Prec, Fixity, LeftMaxPrec, RightMaxPrec) :-
+    lookup_infix_op(Table, OpName, Prec, Fixity, LeftMaxPrec, RightMaxPrec).
+prolog_lookup_prefix_op(Table, OpName, Prec, Fixity, RightMaxPrec) :-
+    lookup_prefix_op(Table, OpName, Prec, Fixity, RightMaxPrec).
+prolog_lookup_postfix_op(Table, OpName, Prec, Fixity, LeftMaxPrec) :-
+    lookup_postfix_op(Table, OpName, Prec, Fixity, LeftMaxPrec).
+prolog_is_operator(Table, OpName, Prec, Fixity) :-
+    is_operator(Table, OpName, Prec, Fixity).
+prolog_op_chars(Op, Chars) :- op_chars(Op, Chars).

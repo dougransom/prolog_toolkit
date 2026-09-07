@@ -6,7 +6,17 @@
    envelopes with source line, file, and span provenance.
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
-:- module(iso_parser, [
+:- module(prolog_parser, [
+    % Canonical Prolog Parser API
+    prolog_parse_term//6,
+    prolog_parse_clause//3,
+    prolog_parse_clause//4,
+    prolog_parse_program//3,
+    prolog_parse_program//4,
+    prolog_initial_var_state/1,
+    prolog_var_state_bindings/4,
+
+    % Backward-compatibility aliases
     parse_term//6,
     parse_clause//3,
     parse_clause//4,
@@ -24,8 +34,8 @@
 :- use_module(library(reif)).
 :- use_module(library(si)).
 
-:- use_module(operator_table).
-:- use_module(token).
+:- use_module(prolog_operator_table).
+:- use_module(prolog_token).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Variable State Tracking (Variable Names, Singletons, Variables)
@@ -400,3 +410,18 @@ parse_program(OpTable, _Options, [], OpTable) --> [].
 parse_program(OpTable0, Options, [Stmt|Stmts], FinalOpTable) -->
     parse_clause(OpTable0, Options, Stmt, OpTable1),
     parse_program(OpTable1, Options, Stmts, FinalOpTable).
+
+%% Canonical prolog_* predicate definitions
+prolog_parse_term(OpTable, Precedence, Term, VarStateIn, VarStateOut, Span) -->
+    parse_term(OpTable, Precedence, Term, VarStateIn, VarStateOut, Span).
+prolog_parse_clause(OpTable0, Stmt, OpTableOut) -->
+    parse_clause(OpTable0, Stmt, OpTableOut).
+prolog_parse_clause(OpTable0, Options, Stmt, OpTableOut) -->
+    parse_clause(OpTable0, Options, Stmt, OpTableOut).
+prolog_parse_program(OpTable, Statements, FinalOpTable) -->
+    parse_program(OpTable, Statements, FinalOpTable).
+prolog_parse_program(OpTable, Options, Statements, FinalOpTable) -->
+    parse_program(OpTable, Options, Statements, FinalOpTable).
+prolog_initial_var_state(State) :- initial_var_state(State).
+prolog_var_state_bindings(State, VarNames, Variables, Singletons) :-
+    var_state_bindings(State, VarNames, Variables, Singletons).

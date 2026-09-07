@@ -1,4 +1,10 @@
-:- module(lexer_rules, [
+:- module(prolog_lexer_rules, [
+    % Canonical Prolog Lexer Rules API
+    prolog_grammar_rule/2,
+    prolog_char_to_esc/2,
+    prolog_is_graphic_char/1,
+
+    % Backward-compatibility aliases
     grammar_rule/2,
     char_to_esc/2,
     is_graphic_char/1
@@ -356,3 +362,8 @@ grammar_rule(helper, ( block_comment_nested_body(Depth, [C|Cs]) -->
     [C],
     block_comment_nested_body(Depth, Cs)
 )).
+
+%% Canonical prolog_* predicate definitions
+prolog_grammar_rule(Kind, Rule) :- grammar_rule(Kind, Rule).
+prolog_char_to_esc(C, Esc) :- char_to_esc(C, Esc).
+prolog_is_graphic_char(C) :- is_graphic_char(C).

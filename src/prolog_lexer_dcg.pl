@@ -1,4 +1,14 @@
-:- module(lexer_dcg, [
+:- module(prolog_lexer_dcg, [
+    % Canonical Prolog Lexer DCG API
+    prolog_char_code_token//1,
+    prolog_quoted_atom_body//1,
+    prolog_string_body//1,
+    prolog_line_comment_dcg//1,
+    prolog_block_comment_iso_dcg//1,
+    prolog_block_comment_nested_dcg//1,
+    prolog_escape_sequence//1,
+
+    % Backward-compatibility aliases
     char_code_token//1,
     quoted_atom_body//1,
     string_body//1,
@@ -23,7 +33,7 @@ Pure DCGs for:
 :- use_module(library(format), [format_//2]).
 :- use_module(library(lists), [append/3, member/2]).
 :- use_module(library(reif)).
-:- use_module(lexer_regex, [digits_to_int/3]).
+:- use_module(prolog_lexer_regex, [digits_to_int/3, prolog_digits_to_int/3]).
 
 %% char_code_token(-Code)//
 % Matches 0'c, 0'\escape, or 0''
@@ -214,3 +224,12 @@ block_comment_nested_body(Depth, ['/','*'|Cs]) -->
 block_comment_nested_body(Depth, [C|Cs]) -->
     [C],
     block_comment_nested_body(Depth, Cs).
+
+%% Canonical prolog_* DCG definitions
+prolog_char_code_token(Code) --> char_code_token(Code).
+prolog_quoted_atom_body(Content) --> quoted_atom_body(Content).
+prolog_string_body(Content) --> string_body(Content).
+prolog_line_comment_dcg(Content) --> line_comment_dcg(Content).
+prolog_block_comment_iso_dcg(Content) --> block_comment_iso_dcg(Content).
+prolog_block_comment_nested_dcg(Content) --> block_comment_nested_dcg(Content).
+prolog_escape_sequence(C) --> escape_sequence(C).
