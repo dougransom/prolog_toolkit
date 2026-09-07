@@ -76,8 +76,6 @@ default_operator_table(op_table(Ops)) :-
         op( 500, yfx, "-"),
         op( 500, yfx, "/\\"),
         op( 500, yfx, "\\/"),
-        op( 500,  fx, "+"),
-        op( 500,  fx, "-"),
 
         % Arithmetic Multiplicative (400)
         op( 400, yfx, "*"),
@@ -100,22 +98,25 @@ default_operator_table(op_table(Ops)) :-
 %% op_chars(+Op, -Chars)
 %  Normalizes Op (atom, chars) into a list of characters.
 op_chars(Op, Chars) :-
-    (   atom(Op) ->
+    (   atom_si(Op) ->
         atom_chars(Op, Chars)
-    ;   list_si(Op) ->
-        Chars = Op
     ;   Chars = Op
     ).
 
+% Base case: empty operator list
 add_operator(Table0, _, _, [], Table0) :- !.
+% Single operator registration: Op is an atom or character list (e.g. "div").
+% Cut commits to single operator registration, preventing a chars string
+% from being mistakenly decomposed as a list of separate operator names.
 add_operator(op_table(Ops0), Prec, Spec, Op, op_table(OpsOut)) :-
-    ( atom(Op) ; chars_si(Op) ), !,
+    ( atom_si(Op) ; chars_si(Op) ), !,
     op_chars(Op, Chars),
     if_(Prec #= 0,
         remove_matching_op(Ops0, Spec, Chars, OpsOut),
         ( remove_matching_op(Ops0, Spec, Chars, CleanOps),
           OpsOut = [op(Prec, Spec, Chars)|CleanOps] )
     ).
+% Batch operator registration: Op is a list of multiple operators: [+, -, *].
 add_operator(Table0, Prec, Spec, [Op|Ops], TableOut) :- !,
     add_operator(Table0, Prec, Spec, Op, Table1),
     add_operator(Table1, Prec, Spec, Ops, TableOut).

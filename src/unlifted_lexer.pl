@@ -143,23 +143,25 @@ unlifted_skip_layout([C|Cs], LayoutBefore0, Options, CharsOut, LayoutBeforeOut, 
 % Single Unlifted Token Scanner
 % -------------------------------------------------------------------------
 
+% Lookahead test for statement full stop: '.' must be followed by layout, line comment '%',
+% block comment opener '/*', or end-of-file.
 is_full_stop_lookahead_chars([], true).
-is_full_stop_lookahead_chars([C|_], true) :-
-    member(C, [' ', '\t', '\r', '\n', '\v', '\f', '%']), !.
 is_full_stop_lookahead_chars(['/','*'|_], true) :- !.
-is_full_stop_lookahead_chars(_, false).
+is_full_stop_lookahead_chars([C|_], Truth) :-
+    memberd_t(C, [' ', '\t', '\r', '\n', '\v', '\f', '%'], Truth).
 
+% Deterministic lookahead dispatch:
+% 1. Full stop (.): must be followed by layout/comment or EOF to terminate a clause;
+%    otherwise, treat as part of a graphic token (e.g. '...').
+% 2. Open parenthesis ((): distinguished by preceding layout into open vs open_ct.
+% 3. All other tokens: standard BNF scanner rule match.
 unlifted_scan_token(LayoutBefore, _Options, Token, CharsIn, CharsOut) :-
     (   CharsIn = ['.'|AfterDot],
         is_full_stop_lookahead_chars(AfterDot, true) ->
         Token = end,
         CharsOut = AfterDot
     ;   CharsIn = ['('|_] ->
-        (   LayoutBefore == true ->
-            phrase(scan_paren(open), CharsIn, CharsOut),
-            Token = open
-        ;   phrase(scan_paren(open_ct), CharsIn, CharsOut),
-            Token = open_ct
-        )
+        if_(LayoutBefore = true, Token = open, Token = open_ct),
+        phrase(scan_paren(Token), CharsIn, CharsOut)
     ;   phrase(scan_token(Token), CharsIn, CharsOut)
     ).

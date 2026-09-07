@@ -45,7 +45,7 @@ lazy_tokenize(Chars, Tokens) :-
 % Produces a lazy token stream where each token is computed on demand.
 lazy_tokenize(Options, Chars, Tokens) :-
     init_position_state("<input>", State0),
-    phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), Chars, _),
+    phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), Chars),
     freeze(Tokens, lazy_annotated_tokens_step(AnnotatedStream, true, Options, Tokens)).
 
 lazy_annotated_tokens_step([], _, _, []).

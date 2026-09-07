@@ -57,16 +57,19 @@ init_loader_state(Options, loader_state([], SearchPaths, BaseOpTable)) :-
     default_search_paths(Options, SearchPaths).
 
 default_search_paths(Options, SearchPaths) :-
-    (   member(library_path(LibPath), Options) ->
-        op_chars(LibPath, LibChars),
-        SearchPaths1 = [path(library, LibChars)]
-    ;   % Default to local reference directory if available
-        SearchPaths1 = [path(library, "reference/scryer-prolog/src/lib")]
-    ),
-    (   member(pkg_path(PkgPath), Options) ->
-        op_chars(PkgPath, PkgChars),
-        SearchPaths = [path(pkg, PkgChars)|SearchPaths1]
-    ;   SearchPaths = [path(pkg, "pkg")|SearchPaths1]
+    lookup_option(Options, library_path, "reference/scryer-prolog/src/lib", LibPath),
+    op_chars(LibPath, LibChars),
+    SearchPaths1 = [path(library, LibChars)],
+    lookup_option(Options, pkg_path, "pkg", PkgPath),
+    op_chars(PkgPath, PkgChars),
+    SearchPaths = [path(pkg, PkgChars)|SearchPaths1].
+
+lookup_option([], _, Default, Default).
+lookup_option([Opt|Opts], Key, Default, Val) :-
+    Opt =.. [K, V],
+    if_(K = Key,
+        Val = V,
+        lookup_option(Opts, Key, Default, Val)
     ).
 
 %% add_search_path(+State0, +Alias, +DirPath, -StateOut)
@@ -104,19 +107,30 @@ spec_to_subpath(A/B, SubPath) :- !,
 spec_to_subpath(AtomOrChars, SubPath) :-
     op_chars(AtomOrChars, SubPath).
 
-join_dir_file(".", File, File) :- !.
-join_dir_file("", File, File) :- !.
 join_dir_file(Dir, File, Out) :-
-    (   append(_, "/", Dir) ->
-        append(Dir, File, Out)
-    ;   append(Dir, "/", DirSlash),
-        append(DirSlash, File, Out)
+    if_(Dir = ".",
+        Out = File,
+        if_(Dir = "",
+            Out = File,
+            if_(ends_with_slash_t(Dir),
+                append(Dir, File, Out),
+                ( append(Dir, "/", DirSlash), append(DirSlash, File, Out) )
+            )
+        )
     ).
 
-ensure_pl_extension(Path, Path) :-
-    append(_, ".pl", Path), !.
+ends_with_slash_t([], false).
+ends_with_slash_t([C|Cs], T) :- ends_with_slash_t_(Cs, C, T).
+
+ends_with_slash_t_([], C, T) :- =(C, '/', T).
+ends_with_slash_t_([C|Cs], _, T) :- ends_with_slash_t_(Cs, C, T).
+
+% Deterministic extension check: prevents spurious backtracking appending .pl multiple times.
 ensure_pl_extension(Path, Out) :-
-    append(Path, ".pl", Out).
+    (   append(_, ".pl", Path) ->
+        Out = Path
+    ;   append(Path, ".pl", Out)
+    ).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Module Loading
@@ -126,24 +140,29 @@ ensure_pl_extension(Path, Out) :-
 load_module_file(FilePath, State0, StateOut, ModuleInfo) :-
     op_chars(FilePath, PathChars),
     State0 = loader_state(Loaded0, SearchPaths, BaseOpTable),
-    (   find_loaded_module(Loaded0, PathChars, CachedInfo) ->
-        ModuleInfo = CachedInfo,
-        StateOut = State0
-    ;   read_file_to_chars(PathChars, Chars),
-        file_directory(PathChars, CurrentDir),
-        % Mark as currently loading with empty info to prevent infinite recursion
-        StateTemp = loader_state([loaded(PathChars, loading)|Loaded0], SearchPaths, BaseOpTable),
-        parse_module_chars(Chars, PathChars, CurrentDir, StateTemp, State1, ModuleInfo),
-        State1 = loader_state(Loaded1, Paths1, BaseOpT1),
-        % Replace temporary loading entry with fully parsed ModuleInfo
-        replace_loaded_entry(Loaded1, PathChars, CleanLoaded),
-        StateOut = loader_state([loaded(PathChars, ModuleInfo)|CleanLoaded], Paths1, BaseOpT1)
+    lookup_loaded_module(Loaded0, PathChars, Found, CachedInfo),
+    if_(Found = true,
+        ( ModuleInfo = CachedInfo, StateOut = State0 ),
+        ( read_file_to_chars(PathChars, Chars),
+          file_directory(PathChars, CurrentDir),
+          % Mark as currently loading with empty info to prevent infinite recursion
+          StateTemp = loader_state([loaded(PathChars, loading)|Loaded0], SearchPaths, BaseOpTable),
+          parse_module_chars(Chars, PathChars, CurrentDir, StateTemp, State1, ModuleInfo),
+          State1 = loader_state(Loaded1, Paths1, BaseOpT1),
+          % Replace temporary loading entry with fully parsed ModuleInfo
+          replace_loaded_entry(Loaded1, PathChars, CleanLoaded),
+          StateOut = loader_state([loaded(PathChars, ModuleInfo)|CleanLoaded], Paths1, BaseOpT1)
+        )
     ).
 
-find_loaded_module([loaded(P, Info)|Rest], Path, ModInfo) :-
+lookup_loaded_module([], _, false, _).
+lookup_loaded_module([loaded(P, Info)|Rest], Path, Found, ModInfo) :-
     if_(P = Path,
-        ( dif(Info, loading), ModInfo = Info ),
-        find_loaded_module(Rest, Path, ModInfo)
+        if_(Info = loading,
+            lookup_loaded_module(Rest, Path, Found, ModInfo),
+            ( Found = true, ModInfo = Info )
+        ),
+        lookup_loaded_module(Rest, Path, Found, ModInfo)
     ).
 
 replace_loaded_entry([], _, []).
@@ -154,11 +173,11 @@ replace_loaded_entry([loaded(P, Info)|Rest], Path, Out) :-
           replace_loaded_entry(Rest, Path, RestOut) )
     ).
 
+% Deterministic path decomposition: commits to the rightmost slash boundary separating directory from filename.
 file_directory(Path, Dir) :-
-    (   append(DirPrefix, [C|FileName], Path),
-        C = 0'/,
-        \+ member(0'/, FileName) ->
-        ( DirPrefix == [] -> Dir = "/" ; Dir = DirPrefix )
+    (   append(DirPrefix, ['/'|FileName], Path),
+        memberd_t('/', FileName, false) ->
+        if_(DirPrefix = [], Dir = "/", Dir = DirPrefix)
     ;   Dir = "."
     ).
 
@@ -169,11 +188,12 @@ read_file_to_chars(Path, Chars) :-
 
 read_stream_chars(Stream, Chars) :-
     get_n_chars(Stream, 4096, Chunk),
-    (   Chunk == [] ->
-        Chars = []
-    ;   Chars = [C|Rest],
-        Chunk = [C|ChunkRest],
-        read_stream_chars_chunk(ChunkRest, Stream, Rest)
+    if_(Chunk = [],
+        Chars = [],
+        ( Chars = [C|Rest],
+          Chunk = [C|ChunkRest],
+          read_stream_chars_chunk(ChunkRest, Stream, Rest)
+        )
     ).
 
 read_stream_chars_chunk([], Stream, Rest) :- !,
@@ -193,28 +213,50 @@ parse_module_chars(Chars, SourceName, CurrentDir, State0, StateOut, ModuleInfo) 
     ModuleInfo = module_info(ModName, Exports, ExportedOps, Statements).
 
 parse_module_tokens([], _Source, _Dir, _OpTable, State, State, Stmts, Stmts, Name, Name, Exps, Exps, _Ops).
-parse_module_tokens([EndTok], _Source, _Dir, _OpTable, State, State, Stmts, Stmts, Name, Name, Exps, Exps, _Ops) :-
-    token_type(EndTok, end), !.
-parse_module_tokens(Tokens, Source, Dir, OpTable0, State0, StateOut, StmtsAcc, StmtsFinal, Name0, NameFinal, Exps0, ExpsFinal, LocalOps0) :-
-    phrase(parse_clause(OpTable0, Stmt, OpTable1), Tokens, TokensRest), !,
-    handle_parsed_statement(Stmt, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
-    parse_module_tokens(TokensRest, Source, Dir, OpTable2, State1, StateOut, [Stmt|StmtsAcc], StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1).
-
-handle_parsed_statement(directive(module(Name, Exports), _), _Dir, OpTable0, OpTableOut, State, State, _, Name, _, Exports, Ops, Ops) :- !,
-    import_exported_ops(Exports, OpTable0, OpTableOut).
-handle_parsed_statement(directive(use_module(Spec), _), Dir, OpTable0, OpTableOut, State0, StateOut, N, N, E, E, Ops, Ops) :- !,
-    import_module_ops(Spec, Dir, OpTable0, OpTableOut, State0, StateOut).
-handle_parsed_statement(directive(use_module(Spec, Imports), _), Dir, OpTable0, OpTableOut, State0, StateOut, N, N, E, E, Ops, Ops) :- !,
-    extract_exported_ops(Imports, SpecifiedOps),
-    (   dif(SpecifiedOps, []) ->
-        import_module_ops(Spec, Dir, OpTable0, OpTableOut, State0, StateOut)
-    ;   OpTableOut = OpTable0,
-        StateOut = State0
+parse_module_tokens([Tok|Rest], Source, Dir, OpTable0, State0, StateOut, StmtsAcc, StmtsFinal, Name0, NameFinal, Exps0, ExpsFinal, LocalOps0) :-
+    token_type(Tok, Type),
+    if_(Type = end,
+        if_(Rest = [],
+            ( StateOut = State0, StmtsFinal = StmtsAcc, NameFinal = Name0, ExpsFinal = Exps0 ),
+            ( phrase(parse_clause(OpTable0, Stmt, OpTable1), [Tok|Rest], TokensRest),
+              handle_parsed_statement(Stmt, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
+              parse_module_tokens(TokensRest, Source, Dir, OpTable2, State1, StateOut, [Stmt|StmtsAcc], StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
+            )
+        ),
+        ( phrase(parse_clause(OpTable0, Stmt, OpTable1), [Tok|Rest], TokensRest),
+          handle_parsed_statement(Stmt, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
+          parse_module_tokens(TokensRest, Source, Dir, OpTable2, State1, StateOut, [Stmt|StmtsAcc], StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
+        )
     ).
-handle_parsed_statement(directive(op(P, S, O), _), _Dir, OpTable0, OpTableOut, State, State, N, N, E, E, Ops0, [op(P, S, O)|Ops0]) :- !,
-    add_operator(OpTable0, P, S, O, OpTableOut).
-handle_parsed_statement(_, _Dir, OpTable, OpTable, State, State, N, N, E, E, Ops, Ops).
 
+handle_parsed_statement(Stmt, Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
+    if_(Stmt = directive(module(ModName, Exports), _),
+        ( NOut = ModName, EOut = Exports, OpsOut = Ops0, StateOut = State0,
+          import_exported_ops(Exports, OpTable0, OpTableOut)
+        ),
+        if_(Stmt = directive(use_module(Spec), _),
+            ( NOut = N0, EOut = E0, OpsOut = Ops0,
+              import_module_ops(Spec, Dir, OpTable0, OpTableOut, State0, StateOut)
+            ),
+            if_(Stmt = directive(use_module(Spec, Imports), _),
+                ( NOut = N0, EOut = E0, OpsOut = Ops0,
+                  extract_exported_ops(Imports, SpecifiedOps),
+                  if_(SpecifiedOps = [],
+                      ( OpTableOut = OpTable0, StateOut = State0 ),
+                      import_module_ops(Spec, Dir, OpTable0, OpTableOut, State0, StateOut)
+                  )
+                ),
+                if_(Stmt = directive(op(P, S, O), _),
+                    ( NOut = N0, EOut = E0, OpsOut = [op(P, S, O)|Ops0], StateOut = State0,
+                      add_operator(OpTable0, P, S, O, OpTableOut)
+                    ),
+                    ( NOut = N0, EOut = E0, OpsOut = Ops0, StateOut = State0, OpTableOut = OpTable0 )
+                )
+            )
+        )
+    ).
+
+% I/O error recovery boundary: if resolution or loading fails due to filesystem errors, catch gracefully returns default state.
 import_module_ops(Spec, CurrentDir, OpTable0, OpTableOut, State0, StateOut) :-
     State0 = loader_state(_, SearchPaths, _),
     (   catch((
@@ -231,17 +273,19 @@ import_module_ops(Spec, CurrentDir, OpTable0, OpTableOut, State0, StateOut) :-
     ).
 
 import_exported_ops([], T, T).
-import_exported_ops([op(P, S, O)|Rest], T0, TOut) :- !,
-    add_operator(T0, P, S, O, T1),
+import_exported_ops([Item|Rest], T0, TOut) :-
+    if_(Item = op(P, S, O),
+        add_operator(T0, P, S, O, T1),
+        T1 = T0
+    ),
     import_exported_ops(Rest, T1, TOut).
-import_exported_ops([_|Rest], T0, TOut) :-
-    import_exported_ops(Rest, T0, TOut).
 
 extract_exported_ops([], []).
-extract_exported_ops([op(P, S, O)|Rest], [op(P, S, O)|OpsRest]) :- !,
-    extract_exported_ops(Rest, OpsRest).
-extract_exported_ops([_|Rest], OpsRest) :-
-    extract_exported_ops(Rest, OpsRest).
+extract_exported_ops([Item|Rest], OpsOut) :-
+    if_(Item = op(P, S, O),
+        ( OpsOut = [op(P, S, O)|OpsRest], extract_exported_ops(Rest, OpsRest) ),
+        extract_exported_ops(Rest, OpsOut)
+    ).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Accessors

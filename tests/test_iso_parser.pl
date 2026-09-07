@@ -71,13 +71,13 @@ test("parse directives and queries", (
 
 test("variable tracking: names, singletons, variables", (
     default_operator_table(OpT),
-    phrase(tokens(Toks), "foo(X, Y) :- bar(X, Z), Z > 0."),
+    phrase(tokens(Toks), "foo(X, Y, _Unused) :- bar(X, Z), Z > 0."),
     phrase(parse_clause(OpT, [variable_names(VNs), singletons(Sing), variables(Vs)], Stmt, _), Toks),
-    Stmt = clause((foo(X, Y) :- bar(X, Z), Z > 0), Meta),
+    Stmt = clause((foo(X, Y, _Unused) :- bar(X, Z), Z > 0), Meta),
     nonvar(Meta),
-    VNs = ['X'=X, 'Y'=Y, 'Z'=Z],
+    VNs = ['X'=X, 'Y'=Y, '_Unused'=_Unused, 'Z'=Z],
     Sing = ['Y'=Y],
-    Vs = [X, Y, Z]
+    Vs = [X, Y, _Unused, Z]
 )).
 
 test("dynamic operator declaration in program parse", (
@@ -94,7 +94,7 @@ test("term_io: iso_read_term_from_chars and iso_write_canonical", (
     Term = tree(leaf, node(X, [1, 2])),
     VNs = ['X'=X],
     term_to_canonical_chars(Term, Chars),
-    Chars = "tree(leaf,node(_A,.(1,.(2,[]))))"
+    Chars = "tree(leaf,node(_A,'.'(1,'.'(2,[]))))"
 )).
 
 run :-

@@ -54,38 +54,57 @@ iso_read_term_from_chars(Chars, Term, Options) :-
 
 apply_empty_options([]).
 apply_empty_options([Opt|Opts]) :-
-    (   Opt = variable_names(VNs) -> VNs = []
-    ;   Opt = variables(Vs) -> Vs = []
-    ;   Opt = singletons(S) -> S = []
-    ;   true
+    if_(Opt = variable_names(VNs),
+        VNs = [],
+        if_(Opt = variables(Vs),
+            Vs = [],
+            if_(Opt = singletons(S),
+                S = [],
+                true
+            )
+        )
     ),
     apply_empty_options(Opts).
 
 parse_tokens_to_term(Tokens, Term, Options) :-
-    (   member(operator_table(OpT), Options) -> true
-    ;   default_operator_table(OpT)
-    ),
+    default_operator_table(DefaultOpT),
+    lookup_option(Options, operator_table, DefaultOpT, OpT),
     initial_var_state(V0),
+    % Deterministic term parse: commits on first valid term AST and throws syntax error on failure
     (   phrase(parse_term(OpT, 1200, Term, _, V0, VFinal), Tokens, TokensRest) ->
-        (   TokensRest = [EndTok|_] ->
-            ( token_type(EndTok, end) -> true
-            ; throw(error(syntax_error(unexpected_token_after_term), EndTok))
-            )
-        ;   TokensRest = [] -> true
-        ;   TokensRest = [BadTok|_],
-            throw(error(syntax_error(unexpected_token_after_term), BadTok))
-        ),
+        verify_tokens_rest(TokensRest),
         var_state_bindings(VFinal, VarNames, Variables, Singletons),
         apply_term_options(Options, VarNames, Variables, Singletons)
     ;   throw(error(syntax_error(failed_to_parse_term), Options))
     ).
 
+verify_tokens_rest([]).
+verify_tokens_rest([EndTok|_]) :-
+    token_type(EndTok, Type),
+    if_(Type = end,
+        true,
+        throw(error(syntax_error(unexpected_token_after_term), EndTok))
+    ).
+
+lookup_option([], _, Default, Default).
+lookup_option([Opt|Opts], Key, Default, Val) :-
+    Opt =.. [K, V],
+    if_(K = Key,
+        Val = V,
+        lookup_option(Opts, Key, Default, Val)
+    ).
+
 apply_term_options([], _, _, _).
 apply_term_options([Opt|Opts], VNs, Vs, Sing) :-
-    (   Opt = variable_names(VNsOut) -> VNsOut = VNs
-    ;   Opt = variables(VsOut) -> VsOut = Vs
-    ;   Opt = singletons(SingOut) -> SingOut = Sing
-    ;   true
+    if_(Opt = variable_names(VNsOut),
+        VNsOut = VNs,
+        if_(Opt = variables(VsOut),
+            VsOut = Vs,
+            if_(Opt = singletons(SingOut),
+                SingOut = Sing,
+                true
+            )
+        )
     ),
     apply_term_options(Opts, VNs, Vs, Sing).
 
@@ -107,20 +126,20 @@ iso_read_term(Stream, Term, Options) :-
 
 read_statement_chars(Stream, Chars) :-
     get_char(Stream, C),
-    (   C == end_of_file ->
-        Chars = []
-    ;   read_statement_chars_rest(C, Stream, Chars)
+    if_(C = end_of_file,
+        Chars = [],
+        read_statement_chars_rest(C, Stream, Chars)
     ).
 
+% Commit to full stop if followed by whitespace or EOF to cleanly segment statements at the stream boundary.
 read_statement_chars_rest('.', Stream, ['.']) :-
-    % Peek next char to see if full stop
     peek_char(Stream, NextC),
     ( NextC == end_of_file ; char_type(NextC, whitespace) ), !.
 read_statement_chars_rest(C, Stream, [C|Cs]) :-
     get_char(Stream, NextC),
-    (   NextC == end_of_file ->
-        Cs = []
-    ;   read_statement_chars_rest(NextC, Stream, Cs)
+    if_(NextC = end_of_file,
+        Cs = [],
+        read_statement_chars_rest(NextC, Stream, Cs)
     ).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -145,7 +164,7 @@ canonical_term(Var) -->
     { var(Var) }, !,
     format_("~q", [Var]).
 canonical_term(Int) -->
-    { integer(Int) }, !,
+    { integer_si(Int) }, !,
     format_("~d", [Int]).
 canonical_term(Float) -->
     { float(Float) }, !,
@@ -153,13 +172,13 @@ canonical_term(Float) -->
 canonical_term([]) --> !,
     "[]".
 canonical_term([Head|Tail]) --> !,
-    ".(",
+    "'.'(",
     canonical_term(Head),
     ",",
     canonical_term(Tail),
     ")".
 canonical_term(Atom) -->
-    { atom(Atom) }, !,
+    { atom_si(Atom) }, !,
     canonical_atom(Atom).
 canonical_term(Compound) -->
     { functor(Compound, Functor, _Arity),
@@ -179,20 +198,41 @@ canonical_args([Arg1, Arg2|Rest]) -->
     canonical_args([Arg2|Rest]).
 
 canonical_atom(Atom) -->
-    { atom_chars(Atom, Chars) },
-    (   { needs_quoting(Chars) } ->
-        format_("~q", [Atom])
-    ;   format_("~s", [Chars])
+    { atom_chars(Atom, Chars),
+      if_(needs_quoting_t(Chars),
+          Fmt = "~q",
+          Fmt = "~a") },
+    format_(Fmt, [Atom]).
+
+needs_quoting_t([], true).
+needs_quoting_t([C|Cs], Truth) :-
+    if_(char_type_lower_t(C),
+        ( all_alphanumeric_or_underscore_t(Cs, Alnum),
+          if_(Alnum = true, Truth = false, Truth = true)
+        ),
+        Truth = true
     ).
 
-needs_quoting([]) :- !.
-needs_quoting([C|Cs]) :-
+% Wraps non-reified engine builtin char_type/2 into binary truth predicate
+char_type_lower_t(C, Truth) :-
     (   char_type(C, lower) ->
-        \+ all_alphanumeric_or_underscore(Cs)
-    ;   true
+        Truth = true
+    ;   Truth = false
     ).
 
-all_alphanumeric_or_underscore([]).
-all_alphanumeric_or_underscore([C|Cs]) :-
-    ( char_type(C, alphanumeric) ; C = '_' ),
-    all_alphanumeric_or_underscore(Cs).
+all_alphanumeric_or_underscore_t([], true).
+all_alphanumeric_or_underscore_t([C|Cs], Truth) :-
+    if_(alphanumeric_or_underscore_t(C),
+        all_alphanumeric_or_underscore_t(Cs, Truth),
+        Truth = false
+    ).
+
+% Wraps non-reified engine builtin char_type/2 into binary truth predicate
+alphanumeric_or_underscore_t(C, Truth) :-
+    if_(C = '_',
+        Truth = true,
+        (   char_type(C, alphanumeric) ->
+            Truth = true
+        ;   Truth = false
+        )
+    ).

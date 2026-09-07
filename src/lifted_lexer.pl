@@ -142,11 +142,13 @@ annotated_clause_step(LayoutBefore0, Options, Tokens, [Item|RestItems], StreamOu
     if_(NonLayoutStream = [],
         ( Tokens = [], StreamOut = [] ),
         ( annotated_scan_single_token(LayoutBefore1, Options, Token, NonLayoutStream, RestStream),
-          (   Token = end(_) ->
-              Tokens = [Token],
-              StreamOut = RestStream
-          ;   annotated_clause_step(false, Options, RestTokens, RestStream, StreamOut),
-              Tokens = [Token|RestTokens]
+          if_(Token = end(_),
+              ( Tokens = [Token],
+                StreamOut = RestStream
+              ),
+              ( annotated_clause_step(false, Options, RestTokens, RestStream, StreamOut),
+                Tokens = [Token|RestTokens]
+              )
           )
         )
     ).
@@ -155,12 +157,18 @@ annotated_clause_step(LayoutBefore0, Options, Tokens, [Item|RestItems], StreamOu
 % Single Lifted Token Scanner (Runs annot_scan_token Directly on annot/5)
 % -------------------------------------------------------------------------
 
+% Lookahead test for statement full stop: '.' must be followed by layout, line comment '%',
+% block comment opener '/*', or end-of-file.
 is_full_stop_lookahead([], true).
-is_full_stop_lookahead([annot(C, _, _, _, _)|_], true) :-
-    member(C, [' ', '\t', '\r', '\n', '\v', '\f', '%']), !.
 is_full_stop_lookahead([annot('/', _, _, _, _), annot('*', _, _, _, _)|_], true) :- !.
-is_full_stop_lookahead(_, false).
+is_full_stop_lookahead([annot(C, _, _, _, _)|_], Truth) :-
+    memberd_t(C, [' ', '\t', '\r', '\n', '\v', '\f', '%'], Truth).
 
+% Deterministic lookahead dispatch:
+% 1. Full stop (.): must be followed by layout/comment or EOF to terminate a clause;
+%    otherwise, treat as part of a graphic token (e.g. '...').
+% 2. Open parenthesis ((): distinguished by preceding layout into open vs open_ct.
+% 3. All other tokens: standard BNF scanner rule match.
 annotated_scan_single_token(LayoutBefore, _Options, LiftedToken, StreamIn, StreamOut) :-
     (   StreamIn = [annot('.', L, Col, Off, Src)|AfterDot],
         is_full_stop_lookahead(AfterDot, true) ->
@@ -169,14 +177,10 @@ annotated_scan_single_token(LayoutBefore, _Options, LiftedToken, StreamIn, Strea
         advance_pos(StartPos, ['.'], EndPos),
         LiftedToken = end(span(StartPos, EndPos))
     ;   StreamIn = [annot('(', _, _, _, _)|_] ->
-        (   LayoutBefore == true ->
-            phrase(annot_scan_paren(node(open, BaseSpan)), StreamIn, StreamOut),
-            half_open_span(BaseSpan, StreamIn, StreamOut, Span),
-            lift_token(open, Span, LiftedToken)
-        ;   phrase(annot_scan_paren(node(open_ct, BaseSpan)), StreamIn, StreamOut),
-            half_open_span(BaseSpan, StreamIn, StreamOut, Span),
-            lift_token(open_ct, Span, LiftedToken)
-        )
+        if_(LayoutBefore = true, ParenType = open, ParenType = open_ct),
+        phrase(annot_scan_paren(node(ParenType, BaseSpan)), StreamIn, StreamOut),
+        half_open_span(BaseSpan, StreamIn, StreamOut, Span),
+        lift_token(ParenType, Span, LiftedToken)
     ;   phrase(annot_scan_token(node(UnliftedToken, BaseSpan)), StreamIn, StreamOut),
         half_open_span(BaseSpan, StreamIn, StreamOut, Span),
         lift_token(UnliftedToken, Span, LiftedToken)
