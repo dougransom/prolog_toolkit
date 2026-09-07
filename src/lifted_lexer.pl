@@ -89,7 +89,7 @@ lifted_clause_tokens(Tokens) -->
 % Scans lifted tokens with Options up to and including the next full stop end(_) token.
 lifted_clause_tokens(Options, Tokens, CharsIn, CharsOut) :-
     init_position_state("<input>", State0),
-    phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), CharsIn, _),
+    phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), CharsIn),
     annotated_clause_tokens(Options, Tokens, AnnotatedStream, RestAnnotated),
     annotated_stream_to_chars(RestAnnotated, CharsOut).
 
@@ -102,7 +102,7 @@ lifted_token(Token) -->
 % Scans a single lifted token with Options and source span.
 lifted_token(Options, Token, CharsIn, CharsOut) :-
     init_position_state("<input>", State0),
-    phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), CharsIn, _),
+    phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), CharsIn),
     annotated_skip_layout(AnnotatedStream, true, Options, StreamAfterLayout, LayoutBefore, _),
     dif(StreamAfterLayout, []),
     annotated_scan_single_token(LayoutBefore, Options, Token, StreamAfterLayout, RestAnnotated),
@@ -142,11 +142,11 @@ annotated_clause_step(LayoutBefore0, Options, Tokens, [Item|RestItems], StreamOu
     if_(NonLayoutStream = [],
         ( Tokens = [], StreamOut = [] ),
         ( annotated_scan_single_token(LayoutBefore1, Options, Token, NonLayoutStream, RestStream),
-          if_(Token = end(_),
-              ( Tokens = [Token], StreamOut = RestStream ),
-              ( annotated_clause_step(false, Options, RestTokens, RestStream, StreamOut),
-                Tokens = [Token|RestTokens]
-              )
+          (   Token = end(_) ->
+              Tokens = [Token],
+              StreamOut = RestStream
+          ;   annotated_clause_step(false, Options, RestTokens, RestStream, StreamOut),
+              Tokens = [Token|RestTokens]
           )
         )
     ).
@@ -155,36 +155,31 @@ annotated_clause_step(LayoutBefore0, Options, Tokens, [Item|RestItems], StreamOu
 % Single Lifted Token Scanner (Runs annot_scan_token Directly on annot/5)
 % -------------------------------------------------------------------------
 
+is_full_stop_lookahead([], true).
+is_full_stop_lookahead([annot(C, _, _, _, _)|_], true) :-
+    member(C, [' ', '\t', '\r', '\n', '\v', '\f', '%']), !.
+is_full_stop_lookahead([annot('/', _, _, _, _), annot('*', _, _, _, _)|_], true) :- !.
+is_full_stop_lookahead(_, false).
+
 annotated_scan_single_token(LayoutBefore, _Options, LiftedToken, StreamIn, StreamOut) :-
-    if_(StreamIn = [annot('.', _, _, _, _)|AfterDot],
-        ( if_(( AfterDot = [] ; AfterDot = [annot(Next, _, _, _, _)|_], memberd_t(Next, [' ', '\t', '\r', '\n', '\v', '\f', '%']) ),
-              ( phrase(annot_scan_token(node(end, BaseSpan)), StreamIn, StreamOut),
-                half_open_span(BaseSpan, StreamIn, StreamOut, Span),
-                lift_token(end, Span, LiftedToken)
-              ),
-              ( phrase(annot_scan_token(node(UnliftedToken, BaseSpan)), StreamIn, StreamOut),
-                half_open_span(BaseSpan, StreamIn, StreamOut, Span),
-                lift_token(UnliftedToken, Span, LiftedToken)
-              )
-          )
-        ),
-        if_(StreamIn = [annot('(', _, _, _, _)|_],
-            ( if_(LayoutBefore = true,
-                  ( phrase(annot_scan_paren(node(open, BaseSpan)), StreamIn, StreamOut),
-                    half_open_span(BaseSpan, StreamIn, StreamOut, Span),
-                    lift_token(open, Span, LiftedToken)
-                  ),
-                  ( phrase(annot_scan_paren(node(open_ct, BaseSpan)), StreamIn, StreamOut),
-                    half_open_span(BaseSpan, StreamIn, StreamOut, Span),
-                    lift_token(open_ct, Span, LiftedToken)
-                  )
-              )
-            ),
-            ( phrase(annot_scan_token(node(UnliftedToken, BaseSpan)), StreamIn, StreamOut),
-              half_open_span(BaseSpan, StreamIn, StreamOut, Span),
-              lift_token(UnliftedToken, Span, LiftedToken)
-            )
+    (   StreamIn = [annot('.', L, Col, Off, Src)|AfterDot],
+        is_full_stop_lookahead(AfterDot, true) ->
+        StreamOut = AfterDot,
+        StartPos = pos(L, Col, Off, Src),
+        advance_pos(StartPos, ['.'], EndPos),
+        LiftedToken = end(span(StartPos, EndPos))
+    ;   StreamIn = [annot('(', _, _, _, _)|_] ->
+        (   LayoutBefore == true ->
+            phrase(annot_scan_paren(node(open, BaseSpan)), StreamIn, StreamOut),
+            half_open_span(BaseSpan, StreamIn, StreamOut, Span),
+            lift_token(open, Span, LiftedToken)
+        ;   phrase(annot_scan_paren(node(open_ct, BaseSpan)), StreamIn, StreamOut),
+            half_open_span(BaseSpan, StreamIn, StreamOut, Span),
+            lift_token(open_ct, Span, LiftedToken)
         )
+    ;   phrase(annot_scan_token(node(UnliftedToken, BaseSpan)), StreamIn, StreamOut),
+        half_open_span(BaseSpan, StreamIn, StreamOut, Span),
+        lift_token(UnliftedToken, Span, LiftedToken)
     ).
 
 % -------------------------------------------------------------------------

@@ -52,7 +52,11 @@ grammar_rule(node, ( scan_token(open_curly) --> ['{'] )).
 grammar_rule(node, ( scan_token(close_curly) --> ['}'] )).
 grammar_rule(node, ( scan_token(comma) --> [','] )).
 grammar_rule(node, ( scan_token(bar) --> ['|'] )).
-grammar_rule(node, ( scan_token(end) --> ['.'] )).
+% Delimiters (end is handled specifically with layout lookahead in lexers)
+
+% ISO Solo character atoms
+grammar_rule(node, ( scan_token(atom("!")) --> ['!'] )).
+grammar_rule(node, ( scan_token(atom(";")) --> [';'] )).
 
 % Quoted atom & string
 grammar_rule(node, ( scan_token(atom(Content)) -->

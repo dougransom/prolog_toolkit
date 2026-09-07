@@ -60,6 +60,42 @@
     span_end/2,
     combine_spans/3,
 
+    % Operator Precedence Table API
+    default_operator_table/1,
+    add_operator/5,
+    lookup_infix_op/6,
+    lookup_prefix_op/5,
+    lookup_postfix_op/5,
+    is_operator/4,
+
+    % ISO Term & Clause Parser API
+    parse_term//6,
+    parse_clause//3,
+    parse_clause//4,
+    parse_program//3,
+    parse_program//4,
+
+    % Module Loader & Search Path Resolver API
+    init_loader_state/1,
+    init_loader_state/2,
+    add_search_path/4,
+    resolve_module_path/4,
+    load_module_file/4,
+    parse_module_chars/6,
+    module_info_name/2,
+    module_info_exports/2,
+    module_info_ops/2,
+    module_info_statements/2,
+
+    % Term I/O (read_term, canonical formatting)
+    iso_read_term/2,
+    iso_read_term/3,
+    iso_read_term_from_chars/2,
+    iso_read_term_from_chars/3,
+    iso_write_canonical/1,
+    iso_write_canonical/2,
+    term_to_canonical_chars/2,
+
     % Re-exported from parser_experiments pipeline (temporary direct reference)
     pipeline_stream_parse/5,
     default_stream_parse/3,
@@ -86,6 +122,10 @@
 ]).
 :- use_module(lexer).
 :- use_module(streaming_lexer).
+:- use_module(operator_table).
+:- use_module(iso_parser).
+:- use_module(module_loader).
+:- use_module(term_io).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    NOTE: Dependency Architecture & Roadmap

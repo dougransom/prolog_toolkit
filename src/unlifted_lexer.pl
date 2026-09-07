@@ -143,20 +143,23 @@ unlifted_skip_layout([C|Cs], LayoutBefore0, Options, CharsOut, LayoutBeforeOut, 
 % Single Unlifted Token Scanner
 % -------------------------------------------------------------------------
 
+is_full_stop_lookahead_chars([], true).
+is_full_stop_lookahead_chars([C|_], true) :-
+    member(C, [' ', '\t', '\r', '\n', '\v', '\f', '%']), !.
+is_full_stop_lookahead_chars(['/','*'|_], true) :- !.
+is_full_stop_lookahead_chars(_, false).
+
 unlifted_scan_token(LayoutBefore, _Options, Token, CharsIn, CharsOut) :-
-    if_(CharsIn = ['.'|AfterDot],
-        ( if_(( AfterDot = [] ; AfterDot = [Next|_], memberd_t(Next, [' ', '\t', '\r', '\n', '\v', '\f', '%']) ),
-              ( Token = end, CharsOut = AfterDot ),
-              phrase(scan_token(Token), CharsIn, CharsOut)
-          )
-        ),
-        if_(CharsIn = ['('|_],
-            ( if_(LayoutBefore = true,
-                  phrase(scan_paren(open), CharsIn, CharsOut),
-                  phrase(scan_paren(open_ct), CharsIn, CharsOut)
-              ),
-              if_(LayoutBefore = true, Token = open, Token = open_ct)
-            ),
-            phrase(scan_token(Token), CharsIn, CharsOut)
+    (   CharsIn = ['.'|AfterDot],
+        is_full_stop_lookahead_chars(AfterDot, true) ->
+        Token = end,
+        CharsOut = AfterDot
+    ;   CharsIn = ['('|_] ->
+        (   LayoutBefore == true ->
+            phrase(scan_paren(open), CharsIn, CharsOut),
+            Token = open
+        ;   phrase(scan_paren(open_ct), CharsIn, CharsOut),
+            Token = open_ct
         )
+    ;   phrase(scan_token(Token), CharsIn, CharsOut)
     ).
