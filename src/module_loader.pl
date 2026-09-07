@@ -16,7 +16,9 @@
     add_search_path/4,
     resolve_module_path/4,
     load_module_file/4,
+    load_module_file/5,
     parse_module_chars/6,
+    parse_module_chars/7,
     module_info_name/2,
     module_info_exports/2,
     module_info_ops/2,
@@ -138,6 +140,10 @@ ensure_pl_extension(Path, Out) :-
 
 %% load_module_file(+FilePath, +State0, -StateOut, -ModuleInfo)
 load_module_file(FilePath, State0, StateOut, ModuleInfo) :-
+    load_module_file(FilePath, [], State0, StateOut, ModuleInfo).
+
+%% load_module_file(+FilePath, +Options, +State0, -StateOut, -ModuleInfo)
+load_module_file(FilePath, Options, State0, StateOut, ModuleInfo) :-
     op_chars(FilePath, PathChars),
     State0 = loader_state(Loaded0, SearchPaths, BaseOpTable),
     lookup_loaded_module(Loaded0, PathChars, Found, CachedInfo),
@@ -147,7 +153,7 @@ load_module_file(FilePath, State0, StateOut, ModuleInfo) :-
           file_directory(PathChars, CurrentDir),
           % Mark as currently loading with empty info to prevent infinite recursion
           StateTemp = loader_state([loaded(PathChars, loading)|Loaded0], SearchPaths, BaseOpTable),
-          parse_module_chars(Chars, PathChars, CurrentDir, StateTemp, State1, ModuleInfo),
+          parse_module_chars(Chars, Options, PathChars, CurrentDir, StateTemp, State1, ModuleInfo),
           State1 = loader_state(Loaded1, Paths1, BaseOpT1),
           % Replace temporary loading entry with fully parsed ModuleInfo
           replace_loaded_entry(Loaded1, PathChars, CleanLoaded),
@@ -206,28 +212,45 @@ read_stream_chars_chunk([C|Cs], Stream, [C|Rest]) :-
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 parse_module_chars(Chars, SourceName, CurrentDir, State0, StateOut, ModuleInfo) :-
-    phrase(tokens(Tokens), Chars),
+    parse_module_chars(Chars, [], SourceName, CurrentDir, State0, StateOut, ModuleInfo).
+
+parse_module_chars(Chars, Options, SourceName, CurrentDir, State0, StateOut, ModuleInfo) :-
+    phrase(prolog_tokens(Tokens), Chars),
     State0 = loader_state(_, _, BaseOpTable),
-    parse_module_tokens(Tokens, SourceName, CurrentDir, BaseOpTable, State0, StateOut, [], Statements, unknown, ModName, [], Exports, []),
+    parse_module_tokens(Tokens, Options, SourceName, CurrentDir, BaseOpTable, State0, StateOut, [], Statements, unknown, ModName, [], Exports, []),
     extract_exported_ops(Exports, ExportedOps),
     ModuleInfo = module_info(ModName, Exports, ExportedOps, Statements).
 
-parse_module_tokens([], _Source, _Dir, _OpTable, State, State, Stmts, Stmts, Name, Name, Exps, Exps, _Ops).
-parse_module_tokens([Tok|Rest], Source, Dir, OpTable0, State0, StateOut, StmtsAcc, StmtsFinal, Name0, NameFinal, Exps0, ExpsFinal, LocalOps0) :-
+parse_module_tokens([], _Options, _Source, _Dir, _OpTable, State, State, Stmts, Stmts, Name, Name, Exps, Exps, _Ops).
+parse_module_tokens([Tok|Rest], Options, Source, Dir, OpTable0, State0, StateOut, StmtsAcc, StmtsFinal, Name0, NameFinal, Exps0, ExpsFinal, LocalOps0) :-
     token_type(Tok, Type),
     if_(Type = end,
         if_(Rest = [],
             ( StateOut = State0, StmtsFinal = StmtsAcc, NameFinal = Name0, ExpsFinal = Exps0 ),
-            ( phrase(parse_clause(OpTable0, Stmt, OpTable1), [Tok|Rest], TokensRest),
-              handle_parsed_statement(Stmt, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
-              parse_module_tokens(TokensRest, Source, Dir, OpTable2, State1, StateOut, [Stmt|StmtsAcc], StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
+            ( phrase(parse_clause(OpTable0, Options, Stmt, OpTable1), [Tok|Rest], TokensRest),
+              process_parsed_statement(Stmt, StmtsAcc, StmtsAcc1, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
+              parse_module_tokens(TokensRest, Options, Source, Dir, OpTable2, State1, StateOut, StmtsAcc1, StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
             )
         ),
-        ( phrase(parse_clause(OpTable0, Stmt, OpTable1), [Tok|Rest], TokensRest),
-          handle_parsed_statement(Stmt, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
-          parse_module_tokens(TokensRest, Source, Dir, OpTable2, State1, StateOut, [Stmt|StmtsAcc], StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
+        ( phrase(parse_clause(OpTable0, Options, Stmt, OpTable1), [Tok|Rest], TokensRest),
+          process_parsed_statement(Stmt, StmtsAcc, StmtsAcc1, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
+          parse_module_tokens(TokensRest, Options, Source, Dir, OpTable2, State1, StateOut, StmtsAcc1, StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
         )
     ).
+
+process_parsed_statement([], StmtsAcc, StmtsAcc, _Dir, OpTable, OpTable, State, State, N, N, E, E, Ops, Ops) :- !.
+process_parsed_statement([S|Ss], StmtsAcc, StmtsAccOut, Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
+    !,
+    handle_parsed_statements([S|Ss], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut),
+    reverse([S|Ss], RevStmt),
+    append(RevStmt, StmtsAcc, StmtsAccOut).
+process_parsed_statement(Stmt, StmtsAcc, [Stmt|StmtsAcc], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
+    handle_parsed_statements([Stmt], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut).
+
+handle_parsed_statements([], _, OpTable, OpTable, State, State, N, N, E, E, Ops, Ops).
+handle_parsed_statements([S|Ss], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
+    handle_parsed_statement(S, Dir, OpTable0, OpTable1, State0, State1, N0, N1, E0, E1, Ops0, Ops1),
+    handle_parsed_statements(Ss, Dir, OpTable1, OpTableOut, State1, StateOut, N1, NOut, E1, EOut, Ops1, OpsOut).
 
 handle_parsed_statement(Stmt, Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
     if_(Stmt = directive(module(ModName, Exports), _),

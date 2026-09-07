@@ -11,6 +11,7 @@
     prolog_parse_term//6,
     prolog_parse_clause//3,
     prolog_parse_clause//4,
+    prolog_parse_raw_clause//4,
     prolog_parse_program//3,
     prolog_parse_program//4,
     prolog_initial_var_state/1,
@@ -20,6 +21,7 @@
     parse_term//6,
     parse_clause//3,
     parse_clause//4,
+    parse_raw_clause//4,
     parse_program//3,
     parse_program//4,
     initial_var_state/1,
@@ -36,6 +38,10 @@
 
 :- use_module(prolog_operator_table).
 :- use_module(prolog_token).
+:- use_module(prolog_expander, [
+    prolog_expand_statement/5,
+    prolog_initial_expander_state/2
+]).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Variable State Tracking (Variable Names, Singletons, Variables)
@@ -312,8 +318,8 @@ parse_list_next(Other, Tok, _OpTable, _, _, _) -->
 parse_clause(OpTable0, Statement, OpTableOut) -->
     parse_clause(OpTable0, [], Statement, OpTableOut).
 
-%% parse_clause(+OpTable0, +Options, -Statement, -OpTableOut)//
-parse_clause(OpTable0, Options, Statement, OpTableOut) -->
+%% parse_raw_clause(+OpTable0, +Options, -Statement, -OpTableOut)//
+parse_raw_clause(OpTable0, Options, Statement, OpTableOut) -->
     peek_token(FirstTok),
     { token_span(FirstTok, StartSpan) },
     { initial_var_state(V0) },
@@ -330,6 +336,37 @@ parse_clause(OpTable0, Options, Statement, OpTableOut) -->
           throw(error(syntax_error(expected_full_stop_end), EndTok))
       )
     }.
+
+%% parse_clause(+OpTable0, +Options, -Statement, -OpTableOut)//
+parse_clause(OpTable0, Options, Statement, OpTableOut) -->
+    parse_raw_clause(OpTable0, Options, RawStatement, OpTable1),
+    { if_(has_expansion_option_t(Options),
+          ( prolog_initial_expander_state(Options, ExpState0),
+            prolog_expand_statement(Options, RawStatement, ExpandedStmts, ExpState0, _),
+            update_optable_from_statements(ExpandedStmts, OpTable1, OpTableOut),
+            (   ExpandedStmts = [Single] ->
+                Statement = Single
+            ;   Statement = ExpandedStmts
+            )
+          ),
+          ( Statement = RawStatement,
+            OpTableOut = OpTable1
+          )
+      )
+    }.
+
+has_expansion_option_t([], false).
+has_expansion_option_t([Opt|Opts], Truth) :-
+    if_(Opt = expand_mode(M),
+        if_(M = none,
+            has_expansion_option_t(Opts, Truth),
+            Truth = true
+        ),
+        if_(Opt = expand_rules(_),
+            Truth = true,
+            has_expansion_option_t(Opts, Truth)
+        )
+    ).
 
 combine_token_spans(Span1, Span2, Out) :-
     if_(Span1 = none,
@@ -399,6 +436,19 @@ import_exported_ops([Item|Rest], T0, TOut) :-
     ),
     import_exported_ops(Rest, T1, TOut).
 
+update_optable_from_statements([], T, T).
+update_optable_from_statements([Stmt|Rest], T0, TOut) :-
+    update_optable_from_single_statement(Stmt, T0, T1),
+    update_optable_from_statements(Rest, T1, TOut).
+
+update_optable_from_single_statement(directive(op(Prec, Spec, Op), _), T0, T1) :-
+    !,
+    add_operator(T0, Prec, Spec, Op, T1).
+update_optable_from_single_statement(directive(module(_, Exports), _), T0, T1) :-
+    !,
+    import_exported_ops(Exports, T0, T1).
+update_optable_from_single_statement(_, T, T).
+
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Program Parsing (Sequence of Statements until EOF)
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -406,10 +456,25 @@ import_exported_ops([Item|Rest], T0, TOut) :-
 parse_program(OpTable, Statements, FinalOpTable) -->
     parse_program(OpTable, [], Statements, FinalOpTable).
 
-parse_program(OpTable, _Options, [], OpTable) --> [].
-parse_program(OpTable0, Options, [Stmt|Stmts], FinalOpTable) -->
-    parse_clause(OpTable0, Options, Stmt, OpTable1),
-    parse_program(OpTable1, Options, Stmts, FinalOpTable).
+parse_program(OpTable0, Options, Statements, FinalOpTable) -->
+    { prolog_initial_expander_state(Options, ExpState0) },
+    parse_program_loop(OpTable0, Options, Statements, FinalOpTable, ExpState0, _).
+
+parse_program_loop(OpTable, _Options, [], OpTable, ExpState, ExpState) --> [].
+parse_program_loop(OpTable0, Options, Statements, FinalOpTable, ExpState0, ExpStateFinal) -->
+    parse_raw_clause(OpTable0, Options, RawStatement, OpTable1),
+    { if_(has_expansion_option_t(Options),
+          ( prolog_expand_statement(Options, RawStatement, ExpandedStmts, ExpState0, ExpState1),
+            update_optable_from_statements(ExpandedStmts, OpTable1, OpTable2)
+          ),
+          ( ExpandedStmts = [RawStatement],
+            OpTable2 = OpTable1,
+            ExpState1 = ExpState0
+          )
+      ),
+      append(ExpandedStmts, RestStmts, Statements)
+    },
+    parse_program_loop(OpTable2, Options, RestStmts, FinalOpTable, ExpState1, ExpStateFinal).
 
 %% Canonical prolog_* predicate definitions
 prolog_parse_term(OpTable, Precedence, Term, VarStateIn, VarStateOut, Span) -->
@@ -418,6 +483,8 @@ prolog_parse_clause(OpTable0, Stmt, OpTableOut) -->
     parse_clause(OpTable0, Stmt, OpTableOut).
 prolog_parse_clause(OpTable0, Options, Stmt, OpTableOut) -->
     parse_clause(OpTable0, Options, Stmt, OpTableOut).
+prolog_parse_raw_clause(OpTable0, Options, Stmt, OpTableOut) -->
+    parse_raw_clause(OpTable0, Options, Stmt, OpTableOut).
 prolog_parse_program(OpTable, Statements, FinalOpTable) -->
     parse_program(OpTable, Statements, FinalOpTable).
 prolog_parse_program(OpTable, Options, Statements, FinalOpTable) -->

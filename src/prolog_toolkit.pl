@@ -64,10 +64,19 @@
     prolog_parse_term//6,
     prolog_parse_clause//3,
     prolog_parse_clause//4,
+    prolog_parse_raw_clause//4,
     prolog_parse_program//3,
     prolog_parse_program//4,
     prolog_initial_var_state/1,
     prolog_var_state_bindings/4,
+
+    % Canonical Prolog Expander API
+    prolog_initial_expander_state/2,
+    prolog_expand_term/4,
+    prolog_expand_term/5,
+    prolog_expand_statement/4,
+    prolog_expand_statement/5,
+    prolog_dcg_expand_rule/2,
 
     % Backward-compatibility aliases: Lexer
     tokens//1,
@@ -181,6 +190,7 @@
 :- use_module(prolog_streaming_lexer).
 :- use_module(prolog_operator_table).
 :- use_module(prolog_parser).
+:- use_module(prolog_expander).
 :- use_module(module_loader).
 :- use_module(term_io).
 
