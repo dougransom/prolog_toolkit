@@ -77,6 +77,7 @@ default_operator_table(op_table(Ops)) :-
         op( 700, xfx, ">"),
         op( 700, xfx, ">="),
         op( 700, xfx, "is"),
+        op( 700,  fx, "non_counted_backtracking"),
 
         % Module Qualification (600)
         op( 600, xfy, ":"),
@@ -91,6 +92,7 @@ default_operator_table(op_table(Ops)) :-
         op( 400, yfx, "*"),
         op( 400, yfx, "/"),
         op( 400, yfx, "//"),
+        op( 400, yfx, "rdiv"),
         op( 400, yfx, "div"),
         op( 400, yfx, "rem"),
         op( 400, yfx, "mod"),
