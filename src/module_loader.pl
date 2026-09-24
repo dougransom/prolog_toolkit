@@ -228,11 +228,13 @@ parse_module_tokens([Tok|Rest], Options, Source, Dir, OpTable0, State0, StateOut
         if_(Rest = [],
             ( StateOut = State0, StmtsFinal = StmtsAcc, NameFinal = Name0, ExpsFinal = Exps0 ),
             ( phrase(parse_clause(OpTable0, Options, Stmt, OpTable1), [Tok|Rest], TokensRest),
+              !,
               process_parsed_statement(Stmt, StmtsAcc, StmtsAcc1, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
               parse_module_tokens(TokensRest, Options, Source, Dir, OpTable2, State1, StateOut, StmtsAcc1, StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
             )
         ),
         ( phrase(parse_clause(OpTable0, Options, Stmt, OpTable1), [Tok|Rest], TokensRest),
+          !,
           process_parsed_statement(Stmt, StmtsAcc, StmtsAcc1, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
           parse_module_tokens(TokensRest, Options, Source, Dir, OpTable2, State1, StateOut, StmtsAcc1, StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
         )

@@ -23,7 +23,7 @@ Uses the lifted lexer rules to produce tokens with source spans as demanded.
 :- use_module(library(reif)).
 :- use_module('../../parser_experiments/src/stream_annotator', [
     annotated_seq//3,
-    default_annot_step/3
+    default_annot_step/4
 ]).
 :- use_module('../../parser_experiments/src/annotate_position', [
     init_position_state/2

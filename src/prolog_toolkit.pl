@@ -69,11 +69,13 @@
     prolog_parse_program//4,
     prolog_initial_var_state/1,
     prolog_var_state_bindings/4,
+    prolog_var_state_bindings_ex/5,
 
     % Canonical Prolog Expander API
     prolog_initial_expander_state/2,
     prolog_expand_term/4,
     prolog_expand_term/5,
+    prolog_expand_term_lineage/6,
     prolog_expand_statement/4,
     prolog_expand_statement/5,
     prolog_dcg_expand_rule/2,
@@ -153,14 +155,46 @@
     module_info_ops/2,
     module_info_statements/2,
 
-    % Term I/O (read_term, canonical formatting)
+    % Term I/O (ISO & Extended Provenance read_term)
     iso_read_term/2,
     iso_read_term/3,
+    prolog_read_term/2,
+    prolog_read_term/3,
     iso_read_term_from_chars/2,
     iso_read_term_from_chars/3,
+    prolog_read_term_from_chars/2,
+    prolog_read_term_from_chars/3,
+    read_term_ex/2,
+    read_term_ex/3,
+    read_term_ex/4,
+    prolog_read_term_ex/2,
+    prolog_read_term_ex/3,
+    prolog_read_term_ex/4,
+    read_term_ex_from_chars/2,
+    read_term_ex_from_chars/3,
+    read_term_ex_from_chars/4,
+    prolog_read_term_ex_from_chars/2,
+    prolog_read_term_ex_from_chars/3,
+    prolog_read_term_ex_from_chars/4,
     iso_write_canonical/1,
     iso_write_canonical/2,
     term_to_canonical_chars/2,
+
+    % Provenance & Attributed Variables API
+    put_provenance/2,
+    get_provenance/2,
+    is_provenance_var/1,
+    make_provenance_var/2,
+    create_token_provenance_var/5,
+    tokens_annotate_provenance/3,
+    create_term_provenance_var/4,
+    record_macro_expansion/4,
+    provenance_source/2,
+    provenance_span/2,
+    provenance_expansion/2,
+    provenance_type/2,
+    provenance_value/2,
+    attach_variables_provenance/3,
 
     % Re-exported from parser_experiments pipeline (temporary direct reference)
     pipeline_stream_parse/5,
@@ -192,6 +226,7 @@
 :- use_module(prolog_parser).
 :- use_module(prolog_expander).
 :- use_module(module_loader).
+:- use_module(prolog_provenance).
 :- use_module(term_io).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

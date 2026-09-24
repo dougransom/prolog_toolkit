@@ -53,22 +53,20 @@ collect_pl_files([Entry|Entries], Dir, Out) :-
 
 parse_all_files([], _, Passed, Passed, Failed, Failed).
 parse_all_files([File|Files], State0, PassAcc, PassFinal, FailAcc, FailFinal) :-
-    format("Parsing ~s ... ", [File]),
+    format("Parsing ~s ... ", [File]), flush_output,
     catch((
         % Load module file with full dependency resolution & DCG expansion
-        load_module_file(File, [expand_mode(pure_dcg)], State0, State1, ModInfo),
+        load_module_file(File, [expand_mode(pure_dcg)], State0, _State1, ModInfo),
         module_info_statements(ModInfo, Stmts),
         length(Stmts, StmtCount),
-        format("OK (~d statements)~n", [StmtCount]),
+        format("OK (~d statements)~n", [StmtCount]), flush_output,
         PassAcc1 #= PassAcc + 1,
-        FailAcc1 #= FailAcc,
-        NextState = State1
+        FailAcc1 #= FailAcc
     ), Error, (
-        format("FAILED!~n  Error: ~q~n", [Error]),
+        format("FAILED!~n  Error: ~q~n", [Error]), flush_output,
         PassAcc1 #= PassAcc,
-        FailAcc1 #= FailAcc + 1,
-        NextState = State0
+        FailAcc1 #= FailAcc + 1
     )),
-    parse_all_files(Files, NextState, PassAcc1, PassFinal, FailAcc1, FailFinal).
+    parse_all_files(Files, State0, PassAcc1, PassFinal, FailAcc1, FailFinal).
 
 :- initialization(run).

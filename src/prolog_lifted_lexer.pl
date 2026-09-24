@@ -79,7 +79,8 @@ lifted_tokens(Tokens) -->
 %% lifted_tokens(+Options, -Tokens)//
 % Tokenizes plain characters with Options into lifted tokens with source spans.
 lifted_tokens(Options, Tokens, CharsIn, CharsOut) :-
-    init_position_state("<input>", State0),
+    lookup_source(Options, Source),
+    init_position_state(Source, State0),
     phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), CharsIn, CharsOut),
     annotated_tokens(Options, Tokens, AnnotatedStream, []).
 
@@ -101,7 +102,8 @@ lifted_clause_tokens(Tokens) -->
 %% lifted_clause_tokens(+Options, -Tokens)//
 % Scans lifted tokens with Options up to and including the next full stop end(_) token.
 lifted_clause_tokens(Options, Tokens, CharsIn, CharsOut) :-
-    init_position_state("<input>", State0),
+    lookup_source(Options, Source),
+    init_position_state(Source, State0),
     phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), CharsIn),
     annotated_clause_tokens(Options, Tokens, AnnotatedStream, RestAnnotated),
     annotated_stream_to_chars(RestAnnotated, CharsOut).
@@ -114,12 +116,20 @@ lifted_token(Token) -->
 %% lifted_token(+Options, -Token)//
 % Scans a single lifted token with Options and source span.
 lifted_token(Options, Token, CharsIn, CharsOut) :-
-    init_position_state("<input>", State0),
+    lookup_source(Options, Source),
+    init_position_state(Source, State0),
     phrase(annotated_seq(default_annot_step, State0, AnnotatedStream), CharsIn),
     annotated_skip_layout(AnnotatedStream, true, Options, StreamAfterLayout, LayoutBefore, _),
     dif(StreamAfterLayout, []),
     annotated_scan_single_token(LayoutBefore, Options, Token, StreamAfterLayout, RestAnnotated),
     annotated_stream_to_chars(RestAnnotated, CharsOut).
+
+lookup_source([], "<input>").
+lookup_source([Opt|Opts], Source) :-
+    if_(Opt = source(S),
+        Source = S,
+        lookup_source(Opts, Source)
+    ).
 
 % -------------------------------------------------------------------------
 % Annotated Stream Processors (Direct Execution on annot/5)

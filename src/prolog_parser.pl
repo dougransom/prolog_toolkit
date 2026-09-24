@@ -16,6 +16,7 @@
     prolog_parse_program//4,
     prolog_initial_var_state/1,
     prolog_var_state_bindings/4,
+    prolog_var_state_bindings_ex/5,
 
     % Backward-compatibility aliases
     parse_term//6,
@@ -25,7 +26,8 @@
     parse_program//3,
     parse_program//4,
     initial_var_state/1,
-    var_state_bindings/4
+    var_state_bindings/4,
+    var_state_bindings_ex/5
 ]).
 
 :- use_module(library(charsio)).
@@ -49,26 +51,37 @@
 
 initial_var_state(var_state([])).
 
-lookup_var(var_state(Map0), NameChars, Var, var_state(Map1)) :-
+lookup_var(V0, NameChars, Var, V1) :-
+    lookup_var(V0, NameChars, Var, no_span, V1).
+
+lookup_var(var_state(Map0), NameChars, Var, Span, var_state(Map1)) :-
     if_(NameChars = "_",
-        ( Map1 = Map0 ),  % Anonymous variable: fresh, not tracked
-        update_var_map(Map0, NameChars, Var, Map1)
+        ( Map1 = [anon_entry(Var, [Span])|Map0] ),  % Anonymous variable: fresh, tracked with span
+        update_var_map(Map0, NameChars, Var, Span, Map1)
     ).
 
-update_var_map([], Name, Var, [entry(Name, Var, 1)]).
-update_var_map([entry(N, V, Count)|Rest], Name, Var, Out) :-
-    if_(N = Name,
-        ( Var = V,
-          Count1 #= Count + 1,
-          Out = [entry(N, V, Count1)|Rest]
+update_var_map([], Name, Var, Span, [entry(Name, Var, 1, [Span])]).
+update_var_map([E|Rest], Name, Var, Span, Out) :-
+    if_(E = entry(N, V, Count, Spans),
+        if_(N = Name,
+            ( Var = V,
+              Count1 #= Count + 1,
+              Out = [entry(N, V, Count1, [Span|Spans])|Rest]
+            ),
+            ( Out = [E|Rest1],
+              update_var_map(Rest, Name, Var, Span, Rest1)
+            )
         ),
-        ( Out = [entry(N, V, Count)|Rest1],
-          update_var_map(Rest, Name, Var, Rest1)
+        ( Out = [E|Rest1],
+          update_var_map(Rest, Name, Var, Span, Rest1)
         )
     ).
 
 var_state_bindings(var_state(Map), VarNames, Variables, Singletons) :-
     extract_bindings(Map, VarNames, Variables, Singletons).
+
+var_state_bindings_ex(var_state(Map), VarNames, Variables, Singletons, Details) :-
+    extract_bindings_ex(Map, VarNames, Variables, Singletons, Details).
 
 singleton_t(Count, NameChars, Truth) :-
     if_(Count #= 1,
@@ -77,13 +90,40 @@ singleton_t(Count, NameChars, Truth) :-
     ).
 
 extract_bindings([], [], [], []).
-extract_bindings([entry(NameChars, Var, Count)|Rest], [Name = Var|VNs], [Var|Vs], Singletons) :-
-    atom_chars(Name, NameChars),
-    if_(singleton_t(Count, NameChars),
-        Singletons = [Name = Var | SingRest],
-        Singletons = SingRest
-    ),
-    extract_bindings(Rest, VNs, Vs, SingRest).
+extract_bindings([E|Rest], VNs, Vs, Singletons) :-
+    if_(E = entry(NameChars, Var, Count, _Spans),
+        ( atom_chars(Name, NameChars),
+          VNs = [Name = Var|VNRest],
+          Vs = [Var|VRest],
+          if_(singleton_t(Count, NameChars),
+              Singletons = [Name = Var|SingRest],
+              Singletons = SingRest
+          ),
+          extract_bindings(Rest, VNRest, VRest, SingRest)
+        ),
+        extract_bindings(Rest, VNs, Vs, Singletons)
+    ).
+
+extract_bindings_ex([], [], [], [], []).
+extract_bindings_ex([E|Rest], VNs, Vs, Singletons, Details) :-
+    if_(E = entry(NameChars, Var, Count, Spans),
+        ( atom_chars(Name, NameChars),
+          VNs = [Name = Var|VNRest],
+          Vs = [Var|VRest],
+          Details = [var_detail(NameChars, Var, Count, Spans)|DetailRest],
+          if_(singleton_t(Count, NameChars),
+              Singletons = [Name = Var|SingRest],
+              Singletons = SingRest
+          ),
+          extract_bindings_ex(Rest, VNRest, VRest, SingRest, DetailRest)
+        ),
+        if_(E = anon_entry(Var, Spans),
+            ( Details = [anon_var_detail(Var, Spans)|DetailRest],
+              extract_bindings_ex(Rest, VNs, Vs, Singletons, DetailRest)
+            ),
+            extract_bindings_ex(Rest, VNs, Vs, Singletons, Details)
+        )
+    ).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Token Inspection Helpers
@@ -115,8 +155,9 @@ parse_prefix_or_primary(OpTable, MaxPrec, Term, PrecOut, V0, VOut) -->
     parse_primary_token(Type, Val, Tok, OpTable, MaxPrec, Term, PrecOut, V0, VOut).
 
 % Variables
-parse_primary_token(var, NameChars, _Tok, _OpTable, _MaxPrec, Var, 0, V0, VOut) -->
-    { lookup_var(V0, NameChars, Var, VOut) }.
+parse_primary_token(var, NameChars, Tok, _OpTable, _MaxPrec, Var, 0, V0, VOut) -->
+    { token_span(Tok, Span),
+      lookup_var(V0, NameChars, Var, Span, VOut) }.
 
 % Constant Literals
 parse_primary_token(integer, IntVal, _Tok, _OpTable, _MaxPrec, IntVal, 0, V, V) --> [].
@@ -163,6 +204,10 @@ parse_primary_token(open_curly, _, _Tok, OpTable, _MaxPrec, CurlyTerm, 0, V0, VO
           )
         }
     ).
+
+% Solo operator characters as primary terms: (|), (,)
+parse_primary_token(bar, _, _Tok, _OpTable, _MaxPrec, '|', 0, V, V) --> [].
+parse_primary_token(comma, _, _Tok, _OpTable, _MaxPrec, ',', 0, V, V) --> [].
 
 % Atom or Functor Call or Prefix Operator
 parse_primary_token(atom, NameChars, _Tok, OpTable, MaxPrec, Term, PrecOut, V0, VOut) -->
@@ -335,11 +380,13 @@ parse_raw_clause(OpTable0, Options, Statement, OpTableOut) -->
           ),
           throw(error(syntax_error(expected_full_stop_end), EndTok))
       )
-    }.
+    },
+    !.
 
 %% parse_clause(+OpTable0, +Options, -Statement, -OpTableOut)//
 parse_clause(OpTable0, Options, Statement, OpTableOut) -->
     parse_raw_clause(OpTable0, Options, RawStatement, OpTable1),
+    !,
     { if_(has_expansion_option_t(Options),
           ( prolog_initial_expander_state(Options, ExpState0),
             prolog_expand_statement(Options, RawStatement, ExpandedStmts, ExpState0, _),
@@ -492,3 +539,5 @@ prolog_parse_program(OpTable, Options, Statements, FinalOpTable) -->
 prolog_initial_var_state(State) :- initial_var_state(State).
 prolog_var_state_bindings(State, VarNames, Variables, Singletons) :-
     var_state_bindings(State, VarNames, Variables, Singletons).
+prolog_var_state_bindings_ex(State, VarNames, Variables, Singletons, Details) :-
+    var_state_bindings_ex(State, VarNames, Variables, Singletons, Details).

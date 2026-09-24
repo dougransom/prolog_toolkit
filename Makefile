@@ -1,6 +1,6 @@
 # Makefile for Prolog Language Toolkit (prolog_toolkit)
 
-PROLOG ?= nice scryer-safe
+PROLOG ?= PROLOG_TIMEOUT=60s nice scryer-safe
 
 .PHONY: all test test-core test-scryer-lib clean help
 
@@ -22,8 +22,9 @@ test-core:
 	$(PROLOG) tests/test_prolog_expander.pl
 	$(PROLOG) tests/test_module_loader.pl
 	$(PROLOG) tests/test_scryer_lib.pl
+	$(PROLOG) tests/test_term_io.pl
 	@echo "=== All Core Tests Passed ==="
 
 test-scryer-lib:
 	@echo "=== Testing Parsing Across Scryer Standard Library ==="
-	PROLOG_TIMEOUT=300s $(PROLOG) tests/test_parse_all_scryer_lib.pl
+	PROLOG_TIMEOUT=300s PROLOG_MEMORY_MAX=2G $(PROLOG) tests/test_parse_all_scryer_lib.pl

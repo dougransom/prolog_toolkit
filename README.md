@@ -53,5 +53,6 @@ scryer-prolog tests/test_prolog_lexer.pl
 scryer-prolog tests/test_prolog_expander.pl
 scryer-prolog tests/test_module_loader.pl
 scryer-prolog tests/test_scryer_lib.pl
+scryer-prolog tests/test_term_io.pl
 ```
 
