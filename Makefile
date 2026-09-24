@@ -25,6 +25,7 @@ test-core:
 	$(PROLOG) tests/test_term_io.pl
 	$(PROLOG) tests/test_prolog_reactive_ast.pl
 	$(PROLOG) tests/test_prolog_reactive_parser.pl
+	$(PROLOG) tests/test_incremental_ast_patching.pl
 	@echo "=== All Core Tests Passed ==="
 
 test-scryer-lib:

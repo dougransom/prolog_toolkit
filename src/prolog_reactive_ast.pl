@@ -298,13 +298,23 @@ construct_ast_term(postfix(Op), [Arg], Meta, ast_node(Term, Meta)) :-
 construct_ast_term(compound(Functor), Args, Meta, ast_node(Term, Meta)) :-
     !,
     Term =.. [Functor|Args].
-construct_ast_term(clause(Head, Body), _, Meta, ast_node((Head :- Body), Meta)) :-
+construct_ast_term(rule, [Head, Body], Meta, ast_node((Head :- Body), Meta)) :-
     !.
 construct_ast_term(rule(Head, Body), _, Meta, ast_node((Head :- Body), Meta)) :-
     !.
+construct_ast_term(clause, [Head, Body], Meta, ast_node((Head :- Body), Meta)) :-
+    !.
+construct_ast_term(clause(Head, Body), _, Meta, ast_node((Head :- Body), Meta)) :-
+    !.
+construct_ast_term(fact, [Head], Meta, ast_node(Head, Meta)) :-
+    !.
 construct_ast_term(fact(Head), _, Meta, ast_node(Head, Meta)) :-
     !.
+construct_ast_term(dcg_rule, [Head, Body], Meta, ast_node((Head --> Body), Meta)) :-
+    !.
 construct_ast_term(dcg_rule(Head, Body), _, Meta, ast_node((Head --> Body), Meta)) :-
+    !.
+construct_ast_term(directive, [Body], Meta, ast_node((:- Body), Meta)) :-
     !.
 construct_ast_term(directive(Body), _, Meta, ast_node((:- Body), Meta)) :-
     !.

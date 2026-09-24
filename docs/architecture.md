@@ -124,6 +124,15 @@ Prolog's unification engine and `library(atts)` serve as an in-engine Functional
 5. **Position & Provenance Propagation**:
    Token positions, byte offsets, and source file metadata propagate and merge automatically upon node resolution.
 
+### 3.4 Incremental Parsing & AST Holes
+
+A critical capability of the Reactive Attributed AST engine is **fine-grained incremental parsing**:
+- Unparsed, dirty, or actively edited source sections are instantiated as **AST Holes** via `create_ast_hole(HoleNode, HoleID, Metadata)`.
+- The surrounding program/clause AST is parsed and built normally around the hole, remaining in a `lazy` state without blocking or failing on syntax errors inside the dirty region.
+- When the developer finishes editing the sub-expression (or a language server receives a keystroke), **only the modified sub-region is tokenized and parsed** (`reactive_parse_subterm/5`) within the existing clause variable context.
+- Unifying `HoleNode = PatchedGoalNode` automatically triggers `verify_attributes/3`, cascading upward to resolve the parent body and clause AST deterministically.
+- All variable occurrences in the patched sub-term share identical logical variables with the rest of the clause, and registered semantic actions (e.g. goal counting, linting, type checks) fire reactively with zero re-parsing of the surrounding code.
+
 ---
 
 ## 4. Variable Provenance & Attributed Variables (`prolog_provenance`)
@@ -152,6 +161,7 @@ When two variables sharing the same name inside a clause unify (or when terms ar
 The test suite is structured under `tests/`:
 - `test_prolog_reactive_ast.pl`: Reactive AST node creation, out-of-order child resolution, subscriber cascades, rational tree safety, and reactive semantic actions.
 - `test_prolog_reactive_parser.pl`: End-to-end scanning of attributed tokens, operator precedence climbing into reactive ASTs, variable sharing, list expressions, and DCG rules.
+- `test_incremental_ast_patching.pl`: Incremental parsing spike: AST hole creation, targeted sub-expression parsing, and reactive root AST resolution with variable sharing.
 - `test_term_io.pl`: ISO `read_term/2,3`, `read_term_ex/2,3,4`, attributed variable provenance, and macro lineage.
 - `test_prolog_expander.pl`: Term and goal expansion with lineage.
 - `test_parse_all_scryer_lib.pl`: Regression suite parsing Scryer Prolog's standard library.

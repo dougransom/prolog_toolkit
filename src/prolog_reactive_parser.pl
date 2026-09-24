@@ -4,7 +4,10 @@
     reactive_parse_term//4,
     reactive_parse_term//6,
     reactive_chars_to_ast/2,
-    reactive_chars_to_ast/3
+    reactive_chars_to_ast/3,
+    create_ast_hole/3,
+    reactive_parse_subterm/5,
+    reactive_build_rule/4
 ]).
 
 :- use_module(library(charsio)).
@@ -312,3 +315,30 @@ lookup_named_var([entry(Name, ExistingVar, Spans)|Rest], NameChars, Var, Span, R
     ).
 lookup_named_var([anon_entry(V, S)|Rest], NameChars, Var, Span, [anon_entry(V, S)|SubRest]) :-
     lookup_named_var(Rest, NameChars, Var, Span, SubRest).
+
+% --- Incremental Parsing & AST Holes ---
+
+%!  create_ast_hole(-HoleNode, +HoleID, +Metadata) is det.
+%
+%   Creates an unbound lazy AST node representing an unparsed or dirty code region.
+create_ast_hole(HoleNode, HoleID, Metadata) :-
+    lazy_ast_node(HoleNode, [_PendingHoleVal], raw_term, [hole_id(HoleID)|Metadata]).
+
+%!  reactive_parse_subterm(+Chars, +Options, +VarStateIn, -SubNode, -VarStateOut) is semidet.
+%
+%   Incrementally parses a subterm or sub-goal from Chars within an existing
+%   VarState context, allowing variables in the subterm to bind with variables
+%   already defined in the outer clause.
+reactive_parse_subterm(Chars, Options, V0, SubNode, VOut) :-
+    chars_to_attributed_tokens(Chars, Options, AttrTokens),
+    (   member(operators(OpTable), Options) ->
+        true
+    ;   prolog_default_operator_table(OpTable)
+    ),
+    phrase(reactive_parse_term(OpTable, 1200, SubNode, _, V0, VOut), AttrTokens).
+
+%!  reactive_build_rule(+HeadNode, +BodyNode, +Metadata, -RuleAST) is det.
+%
+%   Constructs a reactive rule AST node depending on HeadNode and BodyNode.
+reactive_build_rule(HeadNode, BodyNode, Metadata, RuleAST) :-
+    lazy_ast_node(RuleAST, [HeadNode, BodyNode], rule, [clause_type(rule)|Metadata]).

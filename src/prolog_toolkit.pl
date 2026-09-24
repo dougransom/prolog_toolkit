@@ -229,6 +229,9 @@
     reactive_parse_term//6,
     reactive_chars_to_ast/2,
     reactive_chars_to_ast/3,
+    create_ast_hole/3,
+    reactive_parse_subterm/5,
+    reactive_build_rule/4,
 
     % Re-exported from parser_experiments pipeline (temporary direct reference)
     pipeline_stream_parse/5,
