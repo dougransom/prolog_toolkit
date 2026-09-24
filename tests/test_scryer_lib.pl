@@ -12,7 +12,7 @@
 :- use_module('../src/prolog_token').
 :- use_module('../src/prolog_lexer').
 :- use_module('../src/prolog_operator_table').
-:- use_module('../src/prolog_parser').
+:- use_module('../src/prolog_reactive_parser').
 :- use_module(testing).
 
 native_read_all(Stream, Terms) :-

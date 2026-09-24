@@ -51,7 +51,7 @@
 :- use_module(prolog_lexer).
 :- use_module(prolog_lifted_lexer).
 :- use_module(prolog_operator_table).
-:- use_module(prolog_parser).
+:- use_module(prolog_reactive_parser).
 :- use_module(prolog_expander).
 :- use_module(prolog_provenance).
 :- use_module('../../parser_experiments/src/annotate_position', [

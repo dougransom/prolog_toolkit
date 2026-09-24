@@ -38,7 +38,7 @@
 :- use_module(prolog_token).
 :- use_module(prolog_lexer).
 :- use_module(prolog_operator_table).
-:- use_module(prolog_parser).
+:- use_module(prolog_reactive_parser).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Loader State Data Structure

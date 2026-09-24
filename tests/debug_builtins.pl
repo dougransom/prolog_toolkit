@@ -5,7 +5,7 @@
 :- use_module(library(pio)).
 :- use_module('../src/prolog_toolkit').
 :- use_module('../src/prolog_operator_table').
-:- use_module('../src/prolog_parser').
+:- use_module('../src/prolog_reactive_parser').
 
 debug_builtins :-
     Path = "reference/scryer-prolog/src/lib/builtins.pl",

@@ -260,7 +260,6 @@
 :- use_module(prolog_lexer).
 :- use_module(prolog_streaming_lexer).
 :- use_module(prolog_operator_table).
-:- use_module(prolog_parser).
 :- use_module(prolog_expander).
 :- use_module(module_loader).
 :- use_module(prolog_provenance).

@@ -7,7 +7,6 @@
 
 :- use_module('../src/prolog_reactive_parser').
 :- use_module('../src/prolog_reactive_ast').
-:- use_module('../src/prolog_parser', [prolog_initial_var_state/1]).
 :- use_module(testing).
 
 run_test(Name, Goal) :-
