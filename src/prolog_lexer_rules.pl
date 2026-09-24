@@ -228,63 +228,36 @@ grammar_rule(helper, ( esc_oct_digit(D) -->
 % --- Radix Integers ---
 grammar_rule(helper, ( hex_integer(Val) -->
     "0",
-    ("x" ; "X"),
-    hex_digits(Digits),
-    { dif(Digits, []), digits_to_int(Digits, 16, Val) }
+    re_token_groups("[xX]([0-9a-fA-F]+)", _Match, [Digits]),
+    { digits_to_int(Digits, 16, Val) }
 )).
-grammar_rule(helper, ( hex_digits([D|Ds]) --> hex_digit(D), !, hex_digits(Ds) )).
-grammar_rule(helper, ( hex_digits([]) --> [] )).
-grammar_rule(helper, ( hex_digit(D) --> [D], { memberd_t(D, "0123456789abcdefABCDEF", true) } )).
 
 grammar_rule(helper, ( oct_integer(Val) -->
     "0",
-    ("o" ; "O"),
-    oct_digits(Digits),
-    { dif(Digits, []), digits_to_int(Digits, 8, Val) }
+    re_token_groups("[oO]([0-7]+)", _Match, [Digits]),
+    { digits_to_int(Digits, 8, Val) }
 )).
-grammar_rule(helper, ( oct_digits([D|Ds]) --> oct_digit(D), !, oct_digits(Ds) )).
-grammar_rule(helper, ( oct_digits([]) --> [] )).
-grammar_rule(helper, ( oct_digit(D) --> [D], { memberd_t(D, "01234567", true) } )).
 
 grammar_rule(helper, ( bin_integer(Val) -->
     "0",
-    ("b" ; "B"),
-    bin_digits(Digits),
-    { dif(Digits, []), digits_to_int(Digits, 2, Val) }
+    re_token_groups("[bB]([01]+)", _Match, [Digits]),
+    { digits_to_int(Digits, 2, Val) }
 )).
-grammar_rule(helper, ( bin_digits([D|Ds]) --> bin_digit(D), !, bin_digits(Ds) )).
-grammar_rule(helper, ( bin_digits([]) --> [] )).
-grammar_rule(helper, ( bin_digit(D) --> [D], { memberd_t(D, "01", true) } )).
 
 % --- Floats & Decimal Integers ---
 grammar_rule(helper, ( float_number(Val) -->
-    dec_digits(D1),
-    ".",
-    dec_digits(D2),
-    { dif(D1, []), dif(D2, []) },
-    opt_exponent(Exp),
-    { append([D1, ".", D2, Exp], FloatChars),
-      number_chars(Val, FloatChars) }
+    [D],
+    { memberd_t(D, "0123456789", true) },
+    re_token("[0-9]*\\.[0-9]+([eE][+-]?[0-9]+)?", RestMatch),
+    { number_chars(Val, [D|RestMatch]) }
 )).
-grammar_rule(helper, ( opt_exponent(Exp) -->
-    ("e" ; "E"),
-    opt_sign(Sign),
-    dec_digits(Ds),
-    { dif(Ds, []), append([['e'], Sign, Ds], Exp) },
-    !
-)).
-grammar_rule(helper, ( opt_exponent([]) --> [] )).
-grammar_rule(helper, ( opt_sign(['+']) --> "+", ! )).
-grammar_rule(helper, ( opt_sign(['-']) --> "-", ! )).
-grammar_rule(helper, ( opt_sign([]) --> [] )).
 
 grammar_rule(helper, ( dec_integer(Val) -->
-    dec_digits(Ds),
-    { dif(Ds, []), number_chars(Val, Ds) }
+    [D],
+    { memberd_t(D, "0123456789", true) },
+    re_token("[0-9]*", RestDs),
+    { number_chars(Val, [D|RestDs]) }
 )).
-grammar_rule(helper, ( dec_digits([D|Ds]) --> dec_digit(D), !, dec_digits(Ds) )).
-grammar_rule(helper, ( dec_digits([]) --> [] )).
-grammar_rule(helper, ( dec_digit(D) --> [D], { char_type(D, decimal_digit) } )).
 
 % --- Identifiers ---
 grammar_rule(helper, ( var_ident([C|Cs]) -->

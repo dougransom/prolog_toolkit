@@ -54,7 +54,14 @@ Runs directly on the annotated stream ([annot/5]).
     consumed_last/3
 ]).
 :- use_module(prolog_token).
-:- use_module(prolog_lexer_regex, [digits_to_int/3, prolog_digits_to_int/3]).
+:- use_module(prolog_lexer_regex, [
+    digits_to_int/3,
+    prolog_digits_to_int/3,
+    re_token//2,
+    re_token_groups//3,
+    annot_re_token//2,
+    annot_re_token_groups//3
+]).
 :- use_module(prolog_lexer_rules, [
     grammar_rule/2,
     char_to_esc/2,

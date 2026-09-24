@@ -10,6 +10,14 @@
     prolog_float_re_match/3,
     prolog_layout_re_match/3,
     prolog_digits_to_int/3,
+    prolog_re_token//2,
+    prolog_re_token_groups//3,
+
+    % DCG Token Matching Interface (supports plain chars and lifted annot/5 streams)
+    re_token//2,
+    re_token_groups//3,
+    annot_re_token//2,
+    annot_re_token_groups//3,
 
     % Backward-compatibility aliases
     var_re_match/3,
@@ -31,10 +39,14 @@ Uses `pure_regex` to match ISO Prolog regular lexical patterns.
 
 :- use_module(library(charsio)).
 :- use_module(library(clpz)).
+:- use_module(library(dif)).
+:- use_module(library(lists)).
 :- use_module(library(reif)).
 :- use_module('../../pure_regexp/src/pure_regex', [
     re_match/3,
-    re_match_groups/5
+    re_match//2,
+    re_match_groups/5,
+    re_match_groups//3
 ]).
 
 % Variables: [A-Z_][a-zA-Z0-9_]*
@@ -117,3 +129,50 @@ prolog_dec_int_re_match(Input, Match, Rest) :- dec_int_re_match(Input, Match, Re
 prolog_float_re_match(Input, Match, Rest) :- float_re_match(Input, Match, Rest).
 prolog_layout_re_match(Input, Match, Rest) :- layout_re_match(Input, Match, Rest).
 prolog_digits_to_int(Digits, Base, Value) :- digits_to_int(Digits, Base, Value).
+
+%% re_token(+Pattern, -Match)//
+%  DCG non-terminal matching regular expression Pattern against either plain character
+%  streams or lifted annot/5 streams. Advances the stream by the matched elements.
+re_token(Pat, Match, S0, S) :-
+    (   S0 = [annot(_, _, _, _, _)|_] ->
+        annot_stream_chars(S0, Chars),
+        phrase(re_match(Pat, Match), Chars, _),
+        !,
+        length(Match, N),
+        length(Consumed, N),
+        append(Consumed, S, S0)
+    ;   phrase(re_match(Pat, Match), S0, S),
+        !
+    ).
+
+%% re_token_groups(+Pattern, -Match, -Groups)//
+%  DCG non-terminal matching Pattern with positional capture groups against plain character
+%  streams or lifted annot/5 streams.
+re_token_groups(Pat, Match, Groups, S0, S) :-
+    (   S0 = [annot(_, _, _, _, _)|_] ->
+        annot_stream_chars(S0, Chars),
+        phrase(re_match_groups(Pat, Match, Groups), Chars, _),
+        !,
+        length(Match, N),
+        length(Consumed, N),
+        append(Consumed, S, S0)
+    ;   phrase(re_match_groups(Pat, Match, Groups), S0, S),
+        !
+    ).
+
+annot_stream_chars(Stream, Chars) :-
+    (   Stream = [annot(C, _, _, _, _)|Rest] ->
+        (   memberd_t(C, [' ', '\t', '\r', '\n', '\v', '\f', ',', ';', '(', ')', '[', ']', '{', '}', '%', '"', '\''], true) ->
+            Chars = []
+        ;   Chars = [C|RestChars],
+            annot_stream_chars(Rest, RestChars)
+        )
+    ;   Chars = []
+    ).
+
+% Annotated DCG aliases so dcg_annotator prefixes resolve transparently in lifted lexing:
+annot_re_token(Pat, Match, S0, S) :- re_token(Pat, Match, S0, S).
+annot_re_token_groups(Pat, Match, Groups, S0, S) :- re_token_groups(Pat, Match, Groups, S0, S).
+
+prolog_re_token(Pat, Match, S0, S) :- re_token(Pat, Match, S0, S).
+prolog_re_token_groups(Pat, Match, Groups, S0, S) :- re_token_groups(Pat, Match, Groups, S0, S).

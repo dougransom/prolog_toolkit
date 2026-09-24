@@ -6,6 +6,11 @@
 *.orig
 .DS_Store
 
+# Scratch & temporary directories
+scratch/
+*.tmp
+*.log
+
 # Scryer & Prolog artifacts
 *.qlf
 *.so
