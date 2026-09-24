@@ -13,6 +13,7 @@
 :- use_module(library(charsio)).
 :- use_module(library(clpz)).
 :- use_module(library(dcgs)).
+:- use_module(library(dif)).
 :- use_module(library(lists)).
 :- use_module(library(reif)).
 :- use_module(library(si)).
@@ -65,9 +66,9 @@ reactive_chars_to_ast(Chars, ClauseAST) :-
 %   Scans and parses Chars into a reactive AST node with Options.
 reactive_chars_to_ast(Chars, Options, ClauseAST) :-
     chars_to_attributed_tokens(Chars, Options, AttrTokens),
-    (   member(operators(OpTable), Options) ->
-        true
-    ;   prolog_default_operator_table(OpTable)
+    if_(memberd_t(operators(OpTable), Options),
+        true,
+        prolog_default_operator_table(OpTable)
     ),
     phrase(reactive_parse_clause(OpTable, ClauseAST), AttrTokens).
 
@@ -95,15 +96,20 @@ reactive_parse_clause(OpTable, ClauseAST, VarBindings) -->
     }.
 
 wrap_clause_ast(TermNode, ClauseAST) :-
-    % Inspect resolved or lazy structure of TermNode
-    (   TermNode = ast_node((Head :- Body), Meta) ->
-        lazy_ast_node(ClauseAST, [TermNode], rule(Head, Body), [clause_type(rule)|Meta])
-    ;   TermNode = ast_node((Head --> Body), Meta) ->
-        lazy_ast_node(ClauseAST, [TermNode], dcg_rule(Head, Body), [clause_type(dcg)|Meta])
-    ;   TermNode = ast_node((:- Directive), Meta) ->
-        lazy_ast_node(ClauseAST, [TermNode], directive(Directive), [clause_type(directive)|Meta])
-    ;   lazy_ast_node(ClauseAST, [TermNode], fact(TermNode), [clause_type(fact)])
-    ).
+    TermNode = ast_node(Term, Meta),
+    wrap_ast_term(Term, Meta, TermNode, ClauseAST).
+
+wrap_ast_term((Head :- Body), Meta, TermNode, ClauseAST) :-
+    lazy_ast_node(ClauseAST, [TermNode], rule(Head, Body), [clause_type(rule)|Meta]).
+wrap_ast_term((Head --> Body), Meta, TermNode, ClauseAST) :-
+    lazy_ast_node(ClauseAST, [TermNode], dcg_rule(Head, Body), [clause_type(dcg)|Meta]).
+wrap_ast_term((:- Directive), Meta, TermNode, ClauseAST) :-
+    lazy_ast_node(ClauseAST, [TermNode], directive(Directive), [clause_type(directive)|Meta]).
+wrap_ast_term(Term, Meta, TermNode, ClauseAST) :-
+    dif(Term, (_ :- _)),
+    dif(Term, (_ --> _)),
+    dif(Term, (:- _)),
+    lazy_ast_node(ClauseAST, [TermNode], fact(TermNode), [clause_type(fact)|Meta]).
 
 %!  reactive_parse_term(+OpTable, +MaxPrec, -TermNode, -PrecOut)// is semidet.
 reactive_parse_term(OpTable, MaxPrec, TermNode, PrecOut) -->
@@ -119,61 +125,53 @@ reactive_parse_term(OpTable, MaxPrec, TermNode, PrecOut, V0, VOut) -->
 
 reactive_parse_prefix_or_primary(OpTable, MaxPrec, Node, PrecOut, V0, VOut) -->
     [Tok],
-    { is_attributed_token(Tok) },
-    parse_primary_tok(Tok, OpTable, MaxPrec, Node, PrecOut, V0, VOut).
+    { is_attributed_token(Tok),
+      get_token_class(Tok, Class)
+    },
+    parse_primary_class(Class, Tok, OpTable, MaxPrec, Node, PrecOut, V0, VOut).
 
-parse_primary_tok(Tok, _OpTable, _MaxPrec, Node, 0, V0, VOut) -->
-    { get_token_class(Tok, var),
-      get_token_value(Tok, NameChars),
+parse_primary_class(var, Tok, _OpTable, _MaxPrec, Node, 0, V0, VOut) -->
+    { get_token_value(Tok, NameChars),
       get_token_span(Tok, Span),
       lookup_var_reactive(V0, NameChars, ProgVar, Span, VOut),
       lazy_ast_node(Node, [], var_leaf(ProgVar), [name(NameChars), span(Span), type(var)])
     }.
-
-parse_primary_tok(Tok, _OpTable, _MaxPrec, Node, 0, V, V) -->
-    { get_token_class(Tok, integer),
-      get_token_value(Tok, IntVal),
+parse_primary_class(integer, Tok, _OpTable, _MaxPrec, Node, 0, V, V) -->
+    { get_token_value(Tok, IntVal),
       get_token_span(Tok, Span),
       lazy_ast_node(Node, [IntVal], literal, [span(Span), type(integer)])
     }.
-
-parse_primary_tok(Tok, _OpTable, _MaxPrec, Node, 0, V, V) -->
-    { get_token_class(Tok, float),
-      get_token_value(Tok, FloatVal),
+parse_primary_class(float, Tok, _OpTable, _MaxPrec, Node, 0, V, V) -->
+    { get_token_value(Tok, FloatVal),
       get_token_span(Tok, Span),
       lazy_ast_node(Node, [FloatVal], literal, [span(Span), type(float)])
     }.
-
-parse_primary_tok(Tok, _OpTable, _MaxPrec, Node, 0, V, V) -->
-    { get_token_class(Tok, string),
-      get_token_value(Tok, Chars),
+parse_primary_class(string, Tok, _OpTable, _MaxPrec, Node, 0, V, V) -->
+    { get_token_value(Tok, Chars),
       get_token_span(Tok, Span),
       lazy_ast_node(Node, [Chars], literal, [span(Span), type(string)])
     }.
-
-% Parentheses: ( Expr )
-parse_primary_tok(Tok, OpTable, _MaxPrec, Node, 0, V0, VOut) -->
-    { ( get_token_class(Tok, open) ; get_token_class(Tok, open_ct) ) },
+parse_primary_class(open, _Tok, OpTable, _MaxPrec, Node, 0, V0, VOut) -->
     reactive_parse_term(OpTable, 1200, InnerNode, _, V0, V1),
     [CloseTok],
     { get_token_class(CloseTok, close),
       VOut = V1,
       Node = InnerNode
     }.
-
-% List expressions: [ ... ]
-parse_primary_tok(Tok, OpTable, _MaxPrec, Node, 0, V0, VOut) -->
-    { get_token_class(Tok, open_list) },
+parse_primary_class(open_ct, _Tok, OpTable, _MaxPrec, Node, 0, V0, VOut) -->
+    reactive_parse_term(OpTable, 1200, InnerNode, _, V0, V1),
+    [CloseTok],
+    { get_token_class(CloseTok, close),
+      VOut = V1,
+      Node = InnerNode
+    }.
+parse_primary_class(open_list, _Tok, OpTable, _MaxPrec, Node, 0, V0, VOut) -->
     parse_list_elements(OpTable, Node, V0, VOut).
-
-% Atom or Prefix Operator or Functor Call
-parse_primary_tok(Tok, OpTable, MaxPrec, Node, PrecOut, V0, VOut) -->
-    { get_token_class(Tok, atom),
-      get_token_value(Tok, NameChars),
+parse_primary_class(atom, Tok, OpTable, MaxPrec, Node, PrecOut, V0, VOut) -->
+    { get_token_value(Tok, NameChars),
       get_token_span(Tok, Span)
     },
-    (   % Case 1: Compound functor call: foo(Arg1, Arg2, ...)
-        peek_tok(NextTok),
+    (   peek_tok(NextTok),
         { get_token_class(NextTok, open_ct) } ->
         [NextTok],
         parse_reactive_args(OpTable, ArgNodes, V0, V1),
@@ -184,8 +182,7 @@ parse_primary_tok(Tok, OpTable, MaxPrec, Node, PrecOut, V0, VOut) -->
           PrecOut = 0,
           VOut = V1
         }
-    ;   % Case 2: Prefix Operator: op Arg
-        { prolog_lookup_prefix_op(OpTable, NameChars, OpPrec, _Fixity, RightMaxPrec),
+    ;   { prolog_lookup_prefix_op(OpTable, NameChars, OpPrec, _Fixity, RightMaxPrec),
           OpPrec #=< MaxPrec
         },
         peek_tok(NextTok),
@@ -195,8 +192,7 @@ parse_primary_tok(Tok, OpTable, MaxPrec, Node, PrecOut, V0, VOut) -->
           lazy_ast_node(Node, [OperandNode], prefix(OpAtom), [span(Span), op(OpPrec)]),
           PrecOut = OpPrec
         }
-    ;   % Case 3: Standalone Atom
-        { atom_chars(Atom, NameChars),
+    ;   { atom_chars(Atom, NameChars),
           lazy_ast_node(Node, [Atom], literal, [span(Span), type(atom)]),
           PrecOut = 0,
           VOut = V0
@@ -216,23 +212,24 @@ parse_list_elements(OpTable, Node, V0, VOut) -->
 
 parse_list_tail(OpTable, HeadNode, Node, V0, VOut) -->
     [Tok],
-    (   { get_token_class(Tok, comma) } ->
-        reactive_parse_term(OpTable, 999, NextHead, _, V0, V1),
-        parse_list_tail(OpTable, NextHead, TailNode, V1, VOut),
-        { lazy_ast_node(Node, [HeadNode, TailNode], compound('[|]'), [type(list)]) }
-    ;   { get_token_class(Tok, bar) } ->
-        reactive_parse_term(OpTable, 1200, TailNode, _, V0, V1),
-        [CloseTok],
-        { get_token_class(CloseTok, close_list),
-          lazy_ast_node(Node, [HeadNode, TailNode], compound('[|]'), [type(list)]),
-          VOut = V1
-        }
-    ;   { get_token_class(Tok, close_list) },
-        { lazy_ast_node(EmptyList, [], list, [type(list)]),
-          lazy_ast_node(Node, [HeadNode, EmptyList], compound('[|]'), [type(list)]),
-          VOut = V0
-        }
-    ).
+    { get_token_class(Tok, Class) },
+    parse_list_tail_on_class(Class, OpTable, HeadNode, Node, V0, VOut).
+
+parse_list_tail_on_class(comma, OpTable, HeadNode, Node, V0, VOut) -->
+    reactive_parse_term(OpTable, 999, NextHead, _, V0, V1),
+    parse_list_tail(OpTable, NextHead, TailNode, V1, VOut),
+    { lazy_ast_node(Node, [HeadNode, TailNode], compound('[|]'), [type(list)]) }.
+parse_list_tail_on_class(bar, OpTable, HeadNode, Node, V0, VOut) -->
+    reactive_parse_term(OpTable, 1200, TailNode, _, V0, V1),
+    [CloseTok],
+    { get_token_class(CloseTok, close_list),
+      lazy_ast_node(Node, [HeadNode, TailNode], compound('[|]'), [type(list)]),
+      VOut = V1
+    }.
+parse_list_tail_on_class(close_list, _OpTable, HeadNode, Node, V0, V0) -->
+    { lazy_ast_node(EmptyList, [], list, [type(list)]),
+      lazy_ast_node(Node, [HeadNode, EmptyList], compound('[|]'), [type(list)])
+    }.
 
 % --- Infix and Postfix Parsing ---
 
@@ -286,32 +283,32 @@ peek_tok(Tok), [Tok] --> [Tok].
 
 can_be_operand_tok(Tok) :-
     get_token_class(Tok, Class),
-    \+ member(Class, [close, close_list, close_curly, comma, bar, end]).
+    memberd_t(Class, [close, close_list, close_curly, comma, bar, end], false).
 
 is_op_tok(Tok, OpChars) :-
     get_token_class(Tok, Class),
-    (   Class = atom ->
-        get_token_value(Tok, OpChars)
-    ;   Class = comma ->
-        OpChars = ","
-    ;   Class = bar ->
-        OpChars = "|"
-    ;   false
+    if_(Class = atom,
+        get_token_value(Tok, OpChars),
+        if_(Class = comma,
+            OpChars = ",",
+            ( Class = bar, OpChars = "|" )
+        )
     ).
 
 lookup_var_reactive(var_state(Map0), NameChars, Var, Span, var_state(Map1)) :-
-    (   NameChars = "_" ->
-        Map1 = [anon_entry(Var, [Span])|Map0]
-    ;   lookup_named_var(Map0, NameChars, Var, Span, Map1)
+    if_(NameChars = "_",
+        Map1 = [anon_entry(Var, [Span])|Map0],
+        lookup_named_var(Map0, NameChars, Var, Span, Map1)
     ).
 
 lookup_named_var([], NameChars, Var, Span, [entry(NameChars, Var, [Span])]).
 lookup_named_var([entry(Name, ExistingVar, Spans)|Rest], NameChars, Var, Span, Result) :-
-    (   Name == NameChars ->
-        Var = ExistingVar,
-        Result = [entry(Name, Var, [Span|Spans])|Rest]
-    ;   lookup_named_var(Rest, NameChars, Var, Span, SubRest),
-        Result = [entry(Name, ExistingVar, Spans)|SubRest]
+    if_(Name = NameChars,
+        ( Var = ExistingVar,
+          Result = [entry(Name, Var, [Span|Spans])|Rest]
+        ),
+        ( lookup_named_var(Rest, NameChars, Var, Span, SubRest),
+          Result = [entry(Name, ExistingVar, Spans)|SubRest] )
     ).
 lookup_named_var([anon_entry(V, S)|Rest], NameChars, Var, Span, [anon_entry(V, S)|SubRest]) :-
     lookup_named_var(Rest, NameChars, Var, Span, SubRest).
@@ -331,9 +328,9 @@ create_ast_hole(HoleNode, HoleID, Metadata) :-
 %   already defined in the outer clause.
 reactive_parse_subterm(Chars, Options, V0, SubNode, VOut) :-
     chars_to_attributed_tokens(Chars, Options, AttrTokens),
-    (   member(operators(OpTable), Options) ->
-        true
-    ;   prolog_default_operator_table(OpTable)
+    if_(memberd_t(operators(OpTable), Options),
+        true,
+        prolog_default_operator_table(OpTable)
     ),
     phrase(reactive_parse_term(OpTable, 1200, SubNode, _, V0, VOut), AttrTokens).
 

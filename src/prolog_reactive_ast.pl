@@ -12,7 +12,9 @@
 ]).
 
 :- use_module(library(atts)).
+:- use_module(library(dif)).
 :- use_module(library(lists)).
+:- use_module(library(reif)).
 :- use_module(library(si)).
 
 /** <module> Reactive Attributed AST Engine for Prolog
@@ -176,6 +178,8 @@ add_parent_subscriber(ChildVar, ParentNode) :-
     ;   put_atts(ChildVar, ast_subscribers([ParentNode]))
     ).
 
+% Syntactic variable identity (==) is strictly required here to prevent
+% unintended unification between distinct uninstantiated subscriber variables.
 member_var_eq(Var, [H|T]) :-
     (   Var == H ->
         true
@@ -231,7 +235,18 @@ union_var_eq([X|Xs], Acc, Result) :-
     ).
 
 merge_deps(D1, D2, Merged) :-
-    append(D1, D2, Merged).
+    if_(D1 = D2,
+        Merged = D1,
+        ( unify_deps(D1, D2) ->
+            Merged = D1
+        ;   append(D1, D2, Merged)
+        )
+    ).
+
+unify_deps([], []).
+unify_deps([X|Xs], [Y|Ys]) :-
+    X = Y,
+    unify_deps(Xs, Ys).
 
 merge_metadata(M1, M2, Merged) :-
     (   list_si(M1), list_si(M2) ->
@@ -267,15 +282,17 @@ build_and_bind_node(Node, Deps, Constructor, Metadata) :-
 
 run_semantic_actions([], _, _, []).
 run_semantic_actions([M|Ms], Values, Constructor, ResultMeta) :-
-    (   M = semantic_action(Action) ->
-        (   catch(call(Action, Constructor, Values, NewMetaItems), _, NewMetaItems = []) ->
+    if_(M = semantic_action(Action),
+        ( ( catch(call(Action, Constructor, Values, NewMetaItems), _, NewMetaItems = []) ->
             true
-        ;   NewMetaItems = []
+          ; NewMetaItems = []
+          ),
+          run_semantic_actions(Ms, Values, Constructor, RestMeta),
+          append(NewMetaItems, RestMeta, ResultMeta)
         ),
-        run_semantic_actions(Ms, Values, Constructor, RestMeta),
-        append(NewMetaItems, RestMeta, ResultMeta)
-    ;   ResultMeta = [M|RestMeta],
-        run_semantic_actions(Ms, Values, Constructor, RestMeta)
+        ( ResultMeta = [M|RestMeta],
+          run_semantic_actions(Ms, Values, Constructor, RestMeta)
+        )
     ).
 
 resolve_dep_values([], []).
@@ -286,75 +303,72 @@ resolve_dep_values([D|Ds], [V|Vs]) :-
 %!  construct_ast_term(+Constructor, +Values, +Metadata, -FinalTerm) is det.
 %
 %   Constructs the concrete AST term according to the Constructor recipe.
+%   Uses pure first-argument indexing across all constructor shapes with zero cuts.
 construct_ast_term(infix(Op), [Left, Right], Meta, ast_node(Term, Meta)) :-
-    !,
     Term =.. [Op, Left, Right].
 construct_ast_term(prefix(Op), [Arg], Meta, ast_node(Term, Meta)) :-
-    !,
     Term =.. [Op, Arg].
 construct_ast_term(postfix(Op), [Arg], Meta, ast_node(Term, Meta)) :-
-    !,
     Term =.. [Op, Arg].
 construct_ast_term(compound(Functor), Args, Meta, ast_node(Term, Meta)) :-
-    !,
     Term =.. [Functor|Args].
-construct_ast_term(rule, [Head, Body], Meta, ast_node((Head :- Body), Meta)) :-
-    !.
-construct_ast_term(rule(Head, Body), _, Meta, ast_node((Head :- Body), Meta)) :-
-    !.
-construct_ast_term(clause, [Head, Body], Meta, ast_node((Head :- Body), Meta)) :-
-    !.
-construct_ast_term(clause(Head, Body), _, Meta, ast_node((Head :- Body), Meta)) :-
-    !.
-construct_ast_term(fact, [Head], Meta, ast_node(Head, Meta)) :-
-    !.
-construct_ast_term(fact(Head), _, Meta, ast_node(Head, Meta)) :-
-    !.
-construct_ast_term(dcg_rule, [Head, Body], Meta, ast_node((Head --> Body), Meta)) :-
-    !.
-construct_ast_term(dcg_rule(Head, Body), _, Meta, ast_node((Head --> Body), Meta)) :-
-    !.
-construct_ast_term(directive, [Body], Meta, ast_node((:- Body), Meta)) :-
-    !.
-construct_ast_term(directive(Body), _, Meta, ast_node((:- Body), Meta)) :-
-    !.
-construct_ast_term(list, Elements, Meta, ast_node(Elements, Meta)) :-
-    !.
-construct_ast_term(literal, [Val], Meta, ast_node(Val, Meta)) :-
-    !.
-construct_ast_term(prog_var(V), _, Meta, ast_node(V, [type(var)|Meta])) :-
-    !.
-construct_ast_term(var_leaf(V), _, Meta, ast_node(V, [type(var)|Meta])) :-
-    !.
+construct_ast_term(rule, [Head, Body], Meta, ast_node((Head :- Body), Meta)).
+construct_ast_term(rule(Head, Body), _, Meta, ast_node((Head :- Body), Meta)).
+construct_ast_term(clause, [Head, Body], Meta, ast_node((Head :- Body), Meta)).
+construct_ast_term(clause(Head, Body), _, Meta, ast_node((Head :- Body), Meta)).
+construct_ast_term(fact, [Head], Meta, ast_node(Head, Meta)).
+construct_ast_term(fact(Head), _, Meta, ast_node(Head, Meta)).
+construct_ast_term(dcg_rule, [Head, Body], Meta, ast_node((Head --> Body), Meta)).
+construct_ast_term(dcg_rule(Head, Body), _, Meta, ast_node((Head --> Body), Meta)).
+construct_ast_term(directive, [Body], Meta, ast_node((:- Body), Meta)).
+construct_ast_term(directive(Body), _, Meta, ast_node((:- Body), Meta)).
+construct_ast_term(list, Elements, Meta, ast_node(Elements, Meta)).
+construct_ast_term(literal, [Val], Meta, ast_node(Val, Meta)).
+construct_ast_term(prog_var(V), _, Meta, ast_node(V, [type(var)|Meta])).
+construct_ast_term(var_leaf(V), _, Meta, ast_node(V, [type(var)|Meta])).
 construct_ast_term(custom(Pred), Values, Meta, Term) :-
-    !,
     call(Pred, Values, Meta, Term).
-construct_ast_term(raw_term, [Term], _, Term) :-
-    !.
-construct_ast_term(Constructor, Values, Meta, ast_node(custom(Constructor, Values), Meta)).
+construct_ast_term(raw_term, [Term], _, Term).
+construct_ast_term(node(Constructor), Values, Meta, ast_node(custom(Constructor, Values), Meta)).
+construct_ast_term(custom_node(Constructor), Values, Meta, ast_node(custom(Constructor, Values), Meta)).
 
 % --- Span Merging Helper ---
 
 merge_child_spans(Values, Metadata, FinalMetadata) :-
     collect_spans(Values, Spans),
-    (   Spans = [FirstSpan|_],
-        last_element(Spans, LastSpan) ->
-        extract_span_endpoints(FirstSpan, LastSpan, MergedSpan),
-        FinalMetadata = [MergedSpan|Metadata]
-    ;   FinalMetadata = Metadata
+    if_(Spans = [FirstSpan|RestSpans],
+        ( pure_last([FirstSpan|RestSpans], LastSpan),
+          extract_span_endpoints(FirstSpan, LastSpan, MergedSpan),
+          FinalMetadata = [MergedSpan|Metadata]
+        ),
+        FinalMetadata = Metadata
     ).
 
-last_element([X], X) :- !.
-last_element([_|Xs], Last) :-
-    last_element(Xs, Last).
+pure_last([X], X).
+pure_last([_,Y|Ys], Last) :-
+    pure_last([Y|Ys], Last).
 
 collect_spans([], []).
 collect_spans([V|Vs], Spans) :-
-    (   V = ast_node(_, Meta),
-        member(span(Start, End), Meta) ->
-        Spans = [span(Start, End)|RestSpans],
-        collect_spans(Vs, RestSpans)
-    ;   collect_spans(Vs, Spans)
+    node_span_opt(V, SpanOpt),
+    if_(SpanOpt = [Span],
+        ( Spans = [Span|RestSpans], collect_spans(Vs, RestSpans) ),
+        collect_spans(Vs, Spans)
+    ).
+
+node_span_opt(ast_node(_, Meta), Opt) :-
+    extract_span_opt(Meta, Opt).
+node_span_opt(Var, []) :-
+    var(Var).
+node_span_opt(Term, []) :-
+    nonvar(Term),
+    dif(Term, ast_node(_, _)).
+
+extract_span_opt([], []).
+extract_span_opt([M|Ms], Opt) :-
+    if_(M = span(Start, End),
+        Opt = [span(Start, End)],
+        extract_span_opt(Ms, Opt)
     ).
 
 extract_span_endpoints(span(Start, _), span(_, End), span(Start, End)).

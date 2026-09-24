@@ -15,6 +15,7 @@
 
 :- use_module(library(atts)).
 :- use_module(library(lists)).
+:- use_module(library(reif)).
 :- use_module(library(si)).
 
 :- use_module(prolog_token).
@@ -30,7 +31,7 @@ fine-grained attributes:
 - `token_class(Class)`: atom, integer, float, var, string, open, close, comma, end, etc.
 - `token_value(Val)`: token character content or numeric value
 - `token_span(Span)`: source span `span(StartPos, EndPos)`
-- `token_op(OpSpec)`: operator metadata `op(Type, Priority)` if the token is an operator
+- `token_op(OpSpec)`: operator metadata `op(Prec, Fixity)` if the token is an operator
 
 === Benefits of Attributed Tokens ===
 1. **Extensibility**: Tools (LSP, linters, semantic actions) can attach additional
@@ -49,15 +50,17 @@ fine-grained attributes:
     tok_op/1.
 
 verify_attributes(Var, Other, Goals) :-
-    % Merge token attributes if two token variables unify
-    (   get_atts(Var, tok_class(C)) ->
-        (   var(Other) ->
-            put_atts(Other, tok_class(C)),
-            Goals = []
-        ;   Goals = []
-        )
-    ;   Goals = []
+    Goals = [],
+    (   var(Other) ->
+        propagate_token_atts(Var, Other)
+    ;   true
     ).
+
+propagate_token_atts(Var, Other) :-
+    ( get_atts(Var, tok_class(C)) -> put_atts(Other, tok_class(C)) ; true ),
+    ( get_atts(Var, tok_val(V))   -> put_atts(Other, tok_val(V))   ; true ),
+    ( get_atts(Var, tok_span(S))  -> put_atts(Other, tok_span(S))  ; true ),
+    ( get_atts(Var, tok_op(Op))   -> put_atts(Other, tok_op(Op))   ; true ).
 
 %!  create_attributed_token(-TokVar, +Class, +Value, +Span) is det.
 %
@@ -129,8 +132,8 @@ lifted_to_attr_single(Tok, OpTable, AttrTok) :-
     create_attributed_token(AttrTok, Type, Val, Span),
     % Check if token is an operator in OpTable
     (   Type = atom,
-        prolog_is_operator(OpTable, Val, OpType, OpPriority) ->
-        set_token_op(AttrTok, op(OpType, OpPriority))
+        prolog_is_operator(OpTable, Val, Prec, Fixity) ->
+        set_token_op(AttrTok, op(Prec, Fixity))
     ;   true
     ).
 
@@ -144,8 +147,8 @@ chars_to_attributed_tokens(Chars, AttributedTokens) :-
 %!  chars_to_attributed_tokens(+Chars, +Options, -AttributedTokens) is semidet.
 chars_to_attributed_tokens(Chars, Options, AttributedTokens) :-
     prolog_lifted_tokenize(Options, Chars, LiftedTokens),
-    (   member(operators(OpTable), Options) ->
-        true
-    ;   prolog_default_operator_table(OpTable)
+    if_(memberd_t(operators(OpTable), Options),
+        true,
+        prolog_default_operator_table(OpTable)
     ),
     lifted_tokens_to_attributed(LiftedTokens, OpTable, AttributedTokens).
