@@ -32,6 +32,12 @@ A pure, ISO-compliant lexical and syntactic analysis toolkit for the Prolog lang
      - **Token & Term Provenance**: Source spans, line/column offsets, and origin identifiers (file path, interactive toplevel, URL, or stream).
      - **Macro & Expansion Lineage**: When terms are generated through macro expansions (`term_expansion/2`, `goal_expansion/2`, DCG rules), metadata traces back to the original source term and locates the specific expansion rules/macros used.
 
+5. **Source-Provenance Meta-Interpreter & Debugger**
+   - A pure, step-level meta-interpreter capable of executing user code and interpreted Scryer standard library modules (patched if necessary).
+   - **Execution Tracing & Step Debugging**: Inspect each reduction step, variable binding, choice point, and failure with line and column source spans attached directly to goals.
+   - **Derivation Trees**: Construct explicit, visual proof trees / derivation DAGs linking each proof step to exact AST source positions.
+   - **Host Engine Primitive Absorption**: The host Prolog engine absorbs core ISO primitives (unification `=`, control constructs `,`, `;`, `->`, arithmetic, metalogical tests) as well as low-level delimited control (`reset/3` and `shift/1` from `library(cont)`).
+
 ## Running Tests
 
 Run unit tests with `make` or directly with Scryer Prolog:

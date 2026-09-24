@@ -40,11 +40,9 @@ Character Stream (chars)
 | :--- | :--- | :--- |
 | `prolog_toolkit` | [`src/prolog_toolkit.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_toolkit.pl) | Top-level re-export facade for consumer applications. |
 | `prolog_lexer` | [`src/prolog_lexer.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_lexer.pl) | High-performance DCG lexer operating on character lists. |
-| `prolog_lifted_lexer` | [`src/prolog_lifted_lexer.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_lifted_lexer.pl) | Lifted lexer propagating line, column, byte offset, and source. |
-| `prolog_parser` | [`src/prolog_parser.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_parser.pl) | Pure operator-precedence and clause parser. |
+| `prolog_reactive_parser` | [`src/prolog_reactive_parser.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_reactive_parser.pl) | **Unified Parser**: Pure operator-precedence climbing and reactive clause parser supporting both standard raw ISO terms and lazy attributed ASTs. |
 | `prolog_reactive_ast` | [`src/prolog_reactive_ast.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_reactive_ast.pl) | **Reactive Attributed AST Engine**: Lazy AST nodes with dependency tracking and cascade resolution via `library(atts)`. |
 | `prolog_attributed_tokens` | [`src/prolog_attributed_tokens.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_attributed_tokens.pl) | **Attributed Token Stream**: Variables carrying token class, values, positions, and operator metadata. |
-| `prolog_reactive_parser` | [`src/prolog_reactive_parser.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_reactive_parser.pl) | **Reactive Attributed Parser**: DCG grammar parsing attributed token streams into lazy, self-resolving ASTs. |
 | `prolog_provenance` | [`src/prolog_provenance.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_provenance.pl) | First-class variable provenance tracking (names, occurrences, spans) on attributed variables. |
 | `prolog_expander` | [`src/prolog_expander.pl`](file:///home/doug/code/prolog_toolkit/src/prolog_expander.pl) | Pure macro expander with lineage tracking. |
 | `term_io` | [`src/term_io.pl`](file:///home/doug/code/prolog_toolkit/src/term_io.pl) | High-level `read_term_ex` and `iso_read_term` APIs. |
@@ -165,3 +163,18 @@ The test suite is structured under `tests/`:
 - `test_term_io.pl`: ISO `read_term/2,3`, `read_term_ex/2,3,4`, attributed variable provenance, and macro lineage.
 - `test_prolog_expander.pl`: Term and goal expansion with lineage.
 - `test_parse_all_scryer_lib.pl`: Regression suite parsing Scryer Prolog's standard library.
+
+---
+
+## 6. Source-Provenance Meta-Interpreter & Debugger (Roadmap)
+
+### 6.1 Goal & Vision
+Build a pure, step-level meta-interpreter capable of executing user code and interpreted Scryer standard library modules (patched where needed). Leveraging the toolkit's reactive AST and provenance infrastructure, every goal invocation, unification, choicepoint, and reduction step retains its exact source location (`span(StartPos, EndPos)`), enabling:
+- **Execution Tracing & Step Debugging**: Inspect the proof tree interactively with full line/column context.
+- **Visual Derivation Trees**: Construct an explicit DAG or tree representation of the proof search for explanation and debugging.
+
+### 6.2 Host Engine Primitive Absorption
+To maintain high performance and avoid rewriting low-level abstract machine internals in Prolog:
+- **Core ISO Primitives**: Unification (`=`), control structures (`,`, `;`, `->`, `*->`, `!`), arithmetic (`is`, `<`, `>`, etc.), and metalogical tests (`var/1`, `functor/3`, `arg/3`, `=..`) are absorbed directly by the host engine.
+- **Delimited Control (`reset/3` and `shift/1`)**: Absorbed by the host engine. Because `shift` and `reset` in Scryer Prolog manipulate Rust WAM call-frame environments and continuation registers directly (`$reset_cont_marker`, `$unwind_environments`), delegating to the host allows the host to capture the continuation of the running meta-interpreter while preserving source provenance on all standard goal steps.
+
