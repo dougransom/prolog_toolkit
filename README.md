@@ -26,6 +26,12 @@ A pure, ISO-compliant lexical and syntactic analysis toolkit for the Prolog lang
    - Comprehensive test runner that recursively parses all `.pl` files in `reference/scryer-prolog/src/lib/` (50+ files), reporting per-file success, parse times, term counts, and syntax/operator issues.
    - Achieve 100% parse pass rate across the entire Scryer standard library.
 
+4. **ISO-Compatible & Provenance-Annotated Term Reading**
+   - Full ISO-compliant `read_term/N` (e.g. `read_term/2,3`) supporting standard read options (`variables/1`, `variable_names/1`, `singletons/1`, etc.).
+   - `read_term_ex/N` extending standard reading with rich provenance and source origin metadata attached to terms, subterms, and variables via attributed variables:
+     - **Token & Term Provenance**: Source spans, line/column offsets, and origin identifiers (file path, interactive toplevel, URL, or stream).
+     - **Macro & Expansion Lineage**: When terms are generated through macro expansions (`term_expansion/2`, `goal_expansion/2`, DCG rules), metadata traces back to the original source term and locates the specific expansion rules/macros used.
+
 ## Running Tests
 
 Run unit tests with `make` or directly with Scryer Prolog:
