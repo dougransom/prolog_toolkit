@@ -196,6 +196,40 @@
     provenance_value/2,
     attach_variables_provenance/3,
 
+    % Reactive Attributed AST Engine API
+    lazy_ast_node/3,
+    lazy_ast_node/4,
+    is_lazy_ast_node/1,
+    ast_node_status/2,
+    ast_node_deps/2,
+    ast_node_constructor/2,
+    ast_node_metadata/2,
+    ast_node_subscribers/2,
+    resolve_ast_node/1,
+    construct_ast_term/4,
+
+    % Attributed Tokens API
+    create_attributed_token/4,
+    create_attributed_token/5,
+    is_attributed_token/1,
+    get_token_class/2,
+    get_token_value/2,
+    get_token_span/2,
+    get_token_op/2,
+    set_token_op/2,
+    lifted_tokens_to_attributed/2,
+    lifted_tokens_to_attributed/3,
+    chars_to_attributed_tokens/2,
+    chars_to_attributed_tokens/3,
+
+    % Reactive Parser API
+    reactive_parse_clause//2,
+    reactive_parse_clause//3,
+    reactive_parse_term//4,
+    reactive_parse_term//6,
+    reactive_chars_to_ast/2,
+    reactive_chars_to_ast/3,
+
     % Re-exported from parser_experiments pipeline (temporary direct reference)
     pipeline_stream_parse/5,
     default_stream_parse/3,
@@ -228,6 +262,9 @@
 :- use_module(module_loader).
 :- use_module(prolog_provenance).
 :- use_module(term_io).
+:- use_module(prolog_reactive_ast).
+:- use_module(prolog_attributed_tokens).
+:- use_module(prolog_reactive_parser).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    NOTE: Dependency Architecture & Roadmap

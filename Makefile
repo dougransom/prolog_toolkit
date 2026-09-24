@@ -23,6 +23,8 @@ test-core:
 	$(PROLOG) tests/test_module_loader.pl
 	$(PROLOG) tests/test_scryer_lib.pl
 	$(PROLOG) tests/test_term_io.pl
+	$(PROLOG) tests/test_prolog_reactive_ast.pl
+	$(PROLOG) tests/test_prolog_reactive_parser.pl
 	@echo "=== All Core Tests Passed ==="
 
 test-scryer-lib:
