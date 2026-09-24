@@ -108,6 +108,6 @@ test("canonical prolog_* parser and operator table predicates", (
 
 run :-
     run_tests,
-    halt.
+    exit_test_process.
 
 :- initialization(run).

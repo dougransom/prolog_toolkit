@@ -99,6 +99,6 @@ test("term_io: iso_read_term_from_chars and iso_write_canonical", (
 
 run :-
     run_tests,
-    halt.
+    exit_test_process.
 
 :- initialization(run).

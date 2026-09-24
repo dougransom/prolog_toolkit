@@ -9,6 +9,7 @@
 :- use_module(library(si)).
 
 :- use_module('../src/prolog_toolkit').
+:- use_module(testing).
 
 run_test(Name, Goal) :-
     (   catch(Goal, E, (format("FAIL: ~s (exception: ~w)~n", [Name, E]), fail)) ->
@@ -116,6 +117,6 @@ main :-
     run_test("read_term_ex term_ex(Term, Prov) wrapper", test_read_term_ex_wrapper),
     run_test("read_term_ex syntax_errors options (fail, error)", test_read_term_ex_syntax_errors),
     format("=== All Term I/O Tests Passed ===~n", []),
-    halt(0).
+    exit_test_process.
 
 :- initialization(main).

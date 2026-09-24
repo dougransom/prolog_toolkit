@@ -6,6 +6,7 @@
 :- use_module(library(lists)).
 
 :- use_module('../src/prolog_reactive_ast').
+:- use_module(testing).
 
 run_test(Name, Goal) :-
     (   catch(Goal, E, (format("FAIL: ~s (exception: ~w)~n", [Name, E]), fail)) ->
@@ -149,6 +150,6 @@ main :-
     run_test("rational_tree_compatibility", test_rational_tree_compatibility),
     run_test("reactive_semantic_action", test_reactive_semantic_action),
     format("All reactive AST tests passed successfully!~n", []),
-    halt.
+    exit_test_process.
 
 :- initialization(main).

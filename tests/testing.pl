@@ -6,14 +6,30 @@
     run_test_suite/2,
     run_test_suite/3,
     run_module_tests/1,
-    run_test_list/5
+    run_test_list/5,
+    set_consolidated_runner/0,
+    is_consolidated_runner/0,
+    exit_test_process/0
 ]).
 
 :- use_module(library(format)).
 :- use_module(library(si)).
 :- use_module(library(lists)).
+:- use_module(library(iso_ext)).
 
 :- dynamic(test_case/2).
+
+set_consolidated_runner :-
+    bb_put(is_consolidated_runner, true).
+
+is_consolidated_runner :-
+    bb_get(is_consolidated_runner, true).
+
+exit_test_process :-
+    (   is_consolidated_runner ->
+        true
+    ;   halt(0)
+    ).
 
 register_test(Name, Goal) :-
     assertz(test_case(Name, Goal)).
@@ -32,7 +48,7 @@ run_tests :-
     format("=== Test Summary: ~d passed, ~d failed ===~n", [Passed, Failed]),
     (   Failed > 0 ->
         halt(1)
-    ;   true
+    ;   exit_test_process
     ).
 
 run_test_suite(SuiteName, Tests) :-
@@ -44,7 +60,7 @@ run_test_suite(SuiteName, Module, Tests) :-
     format("=== ~s Summary: ~d passed, ~d failed ===~n", [SuiteName, Passed, Failed]),
     (   Failed > 0 ->
         halt(1)
-    ;   true
+    ;   exit_test_process
     ).
 
 run_module_tests(Module) :-

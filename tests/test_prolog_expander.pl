@@ -74,6 +74,6 @@ test("host delegation expand_mode", (
 
 run :-
     run_tests,
-    halt.
+    exit_test_process.
 
 :- initialization(run).

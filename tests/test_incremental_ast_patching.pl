@@ -8,6 +8,7 @@
 :- use_module('../src/prolog_reactive_parser').
 :- use_module('../src/prolog_reactive_ast').
 :- use_module('../src/prolog_parser', [prolog_initial_var_state/1]).
+:- use_module(testing).
 
 run_test(Name, Goal) :-
     (   catch(Goal, E, (format("FAIL: ~s (exception: ~w)~n", [Name, E]), fail)) ->
@@ -131,6 +132,6 @@ main :-
     run_test("single_hole_patching", test_single_hole_patching),
     run_test("multi_hole_out_of_order", test_multi_hole_out_of_order),
     format("All incremental AST patching spike tests passed successfully!~n", []),
-    halt.
+    exit_test_process.
 
 :- initialization(main).

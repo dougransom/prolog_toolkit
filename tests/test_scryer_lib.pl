@@ -100,6 +100,6 @@ test("isomorphism with Scryer native parser: dif.pl", (
 
 run :-
     run_tests,
-    halt.
+    exit_test_process.
 
 :- initialization(run).

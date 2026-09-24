@@ -6,6 +6,7 @@
 :- use_module(library(lists)).
 
 :- use_module('../src/prolog_toolkit').
+:- use_module(testing).
 
 run_test(Name, Goal) :-
     (   catch(Goal, E, (format("FAIL: ~s (exception: ~w)~n", [Name, E]), fail)) ->
@@ -82,6 +83,6 @@ main :-
     run_test("parse_reactive_list", test_parse_reactive_list),
     run_test("parse_reactive_dcg_rule", test_parse_reactive_dcg_rule),
     format("All reactive parser tests passed successfully!~n", []),
-    halt.
+    exit_test_process.
 
 :- initialization(main).

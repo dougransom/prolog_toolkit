@@ -17,6 +17,7 @@ Tests Ported from Scryer Prolog reference:
 :- use_module('../../parser_experiments/src/annotate_position').
 :- use_module('../src/prolog_lexer').
 :- use_module('../src/prolog_streaming_lexer').
+:- use_module(testing, [exit_test_process/0]).
 
 run_tests :-
     format("Running lexer tests...~n", []),
@@ -34,7 +35,7 @@ run_tests :-
     format("  12. test_unlifted_lexer...~n", []), test_unlifted_lexer, !,
     format("  13. test_lifted_lexer...~n", []), test_lifted_lexer, !,
     format("All lexer tests passed!~n", []),
-    halt.
+    testing:exit_test_process.
 
 % -------------------------------------------------------------------------
 % 1. Scryer parse_tokens.rs Parity Tests
