@@ -24,9 +24,7 @@
 :- use_module(test_incremental_ast_patching).
 
 all_tests_passed :-
-    format("~n======================================================~n", []),
-    format("=== ALL CONSOLIDATED CORE TESTS PASSED SUCCESSFULLY ==~n", []),
-    format("======================================================~n~n", []),
+    format("~n======================================================~n=== ALL CONSOLIDATED CORE TESTS PASSED SUCCESSFULLY ==~n======================================================~n~n", []),
     halt(0).
 
 :- initialization(all_tests_passed).

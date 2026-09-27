@@ -1,6 +1,6 @@
 # Makefile for Prolog Language Toolkit (prolog_toolkit)
 
-PROLOG ?= nice scryer-safe
+PROLOG ?= nice scryer-safe -f
 
 .PHONY: all test test-core test-crowlog crowlog test-module-loader test-all test-scryer-lib clean help
 

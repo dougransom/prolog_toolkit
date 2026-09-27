@@ -1,9 +1,11 @@
 :- module(test_scryer_lib, [
+    op(1105, xfy, '|'),
     run/0
 ]).
 
 :- use_module(library(atts)).
 :- op(1199, fx, attribute).
+:- op(1105, xfy, '|').
 :- use_module(library(charsio)).
 :- use_module(library(format)).
 :- use_module(library(iso_ext), [maplist/3]).
@@ -88,6 +90,7 @@ test("isomorphism with Scryer native parser: http/http_open.pl", (
 )).
 
 test("isomorphism with Scryer native parser: dcgs.pl", (
+    op(1105, xfy, '|'),
     default_operator_table(OpT),
     test_isomorphic_file("reference/scryer-prolog/src/lib/dcgs.pl", OpT)
 )).

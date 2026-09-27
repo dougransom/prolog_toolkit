@@ -31,7 +31,7 @@ Commands:
 :- use_module(library(si)).
 
 :- use_module('../src/prolog_toolkit').
-:- use_module('crowlog').
+:- use_module('crowlog.pl').
 
 %% initial_toplevel_state(-State)
 %  Initializes an empty toplevel state with default operators and options.

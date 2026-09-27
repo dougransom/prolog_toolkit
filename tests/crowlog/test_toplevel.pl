@@ -41,7 +41,7 @@ test("derivation tree pretty printing", (
     crowlog_eval_query(path(a, c), [], State1, Derivation),
     derivation_tree_chars(Derivation, Chars),
     chars_contains(Chars, "Derivation Tree"),
-    chars_contains(Chars, "path(a, c)")
+    chars_contains(Chars, "path(a,c)")
 )).
 
 chars_contains(Chars, Sub) :-
