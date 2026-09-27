@@ -47,8 +47,8 @@ crowlog_toplevel :-
 %% crowlog_toplevel(+Init)
 %  Starts Crowlog with an initial State or a list of files to consult.
 crowlog_toplevel(state(KB, Ops, Opts)) :-
-    format("~n=== Crowlog: Source-Provenance Prolog REPL ===~n", []),
-    format("Type 'help.' for commands, or 'halt.' to exit.~n~n", []),
+    format("~n=== Crowlog: Source-Provenance Prolog REPL ===~n\
+Type 'help.' for commands, or 'halt.' to exit.~n~n", []),
     toplevel_loop(state(KB, Ops, Opts)).
 crowlog_toplevel(Files) :-
     if_(Files = [_|_],
@@ -237,8 +237,11 @@ read_file_to_chars(Path, Chars) :-
     read_stream_chars(Stream, Chars),
     close(Stream).
 
+read_chunk_size(4096).
+
 read_stream_chars(Stream, Chars) :-
-    get_n_chars(Stream, 4096, Chunk),
+    read_chunk_size(ChunkSize),
+    get_n_chars(Stream, ChunkSize, Chunk),
     if_(Chunk = [],
         Chars = [],
         (   Chars = [C|Rest],
