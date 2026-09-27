@@ -14,6 +14,7 @@ Host engine absorbs:
 - Core ISO primitives: unification (=), true, fail, control constructs (',', ';', '->', '*->', '!'),
   arithmetic (is, <, >, =<, >=, =:=, =\=), and metalogical tests (var/1, nonvar/1, atom/1, etc.).
 - Delimited control: reset/3 and shift/1 (via library(cont)).
+- Pure conditionals: native interpretation of reified if_/3.
 */
 
 :- use_module(library(charsio)).
@@ -29,72 +30,158 @@ crowlog_interpret(Goal, KB) :-
 
 %% crowlog_interpret(+Goal, +KB, -Derivation)
 %  Interprets Goal and constructs an explicit proof derivation tree.
-crowlog_interpret(true, _, proof(true)) :- !.
-crowlog_interpret((A, B), KB, proof(conjunction(TreeA, TreeB))) :- !,
+%  Dispatches deterministically via reified goal classification without procedural cuts.
+crowlog_interpret(Goal, KB, Derivation) :-
+    goal_shape(Goal, Shape),
+    crowlog_interpret_shape(Shape, KB, Derivation).
+
+crowlog_interpret_shape(true, _, proof(true)).
+crowlog_interpret_shape(conjunction(A, B), KB, proof(conjunction(TreeA, TreeB))) :-
     crowlog_interpret(A, KB, TreeA),
     crowlog_interpret(B, KB, TreeB).
-crowlog_interpret((A ; B), KB, proof(disjunction(Tree))) :- !,
+crowlog_interpret_shape(disjunction(A, B), KB, proof(disjunction(Tree))) :-
     (   crowlog_interpret(A, KB, Tree)
     ;   crowlog_interpret(B, KB, Tree)
     ).
-crowlog_interpret((Cond -> Then ; Else), KB, proof(if_then_else(BranchTree))) :- !,
+crowlog_interpret_shape(if_then_else(Cond, Then, Else), KB, proof(if_then_else(BranchTree))) :-
     (   crowlog_interpret(Cond, KB, CondTree) ->
         crowlog_interpret(Then, KB, ThenTree),
         BranchTree = then(CondTree, ThenTree)
     ;   crowlog_interpret(Else, KB, ElseTree),
         BranchTree = else(ElseTree)
     ).
-crowlog_interpret((Cond -> Then), KB, proof(if_then(CondTree, ThenTree))) :- !,
+crowlog_interpret_shape(if_then(Cond, Then), KB, proof(if_then(CondTree, ThenTree))) :-
     crowlog_interpret(Cond, KB, CondTree),
     crowlog_interpret(Then, KB, ThenTree).
-crowlog_interpret(\+ Goal, KB, proof(negation(Goal))) :- !,
+crowlog_interpret_shape(if_reif(Cond_t, Then, Else), KB, proof(if_reif(T, BranchTree))) :-
+    call(Cond_t, T),
+    if_(T = true,
+        (   crowlog_interpret(Then, KB, ThenTree),
+            BranchTree = then(ThenTree)
+        ),
+        (   crowlog_interpret(Else, KB, ElseTree),
+            BranchTree = else(ElseTree)
+        )).
+crowlog_interpret_shape(negation(Goal), KB, proof(negation(Goal))) :-
     \+ crowlog_interpret(Goal, KB, _).
-crowlog_interpret(reset(Goal, Ball, Cont), KB, proof(reset(Goal))) :- !,
+crowlog_interpret_shape(reset(Goal, Ball, Cont), KB, proof(reset(Goal))) :-
     reset(crowlog_interpret(Goal, KB, _), Ball, Cont).
-crowlog_interpret(shift(Ball), _, proof(shift(Ball))) :- !,
+crowlog_interpret_shape(shift(Ball), _, proof(shift(Ball))) :-
     shift(Ball).
-crowlog_interpret(Goal, KB, proof(step(Goal, Span, BodyTree))) :-
-    (   crowlog_builtin(Goal) ->
-        crowlog_call_builtin(Goal),
-        Span = builtin,
-        BodyTree = proof(builtin)
-    ;   crowlog_clause(Goal, Body, KB, Span),
-        crowlog_interpret(Body, KB, BodyTree)
-    ).
+crowlog_interpret_shape(builtin(Goal), _, proof(step(Goal, builtin, proof(builtin)))) :-
+    crowlog_call_builtin(Goal).
+crowlog_interpret_shape(user_clause(Goal), KB, proof(step(Goal, Span, BodyTree))) :-
+    crowlog_clause(Goal, Body, KB, Span),
+    crowlog_interpret(Body, KB, BodyTree).
 
-%% crowlog_builtin(@Goal)
-%  Identifies predicates absorbed directly by the host engine.
-crowlog_builtin(Goal) :-
-    functor(Goal, Functor, Arity),
-    builtin_spec(Functor, Arity).
+%% goal_shape(+Goal, -Shape)
+%  Classifies Goal into its execution shape using pure reified tests.
+goal_shape(Goal, Shape) :-
+    functor(Goal, F, A),
+    if_(F = true,
+        if_(A = 0, Shape = true, goal_shape_compound(Goal, F, A, Shape)),
+        goal_shape_compound(Goal, F, A, Shape)).
 
-builtin_spec(=, 2).
-builtin_spec(\=, 2).
-builtin_spec(==, 2).
-builtin_spec(\==, 2).
-builtin_spec(dif, 2).
-builtin_spec(is, 2).
-builtin_spec(<, 2).
-builtin_spec(>, 2).
-builtin_spec(=<, 2).
-builtin_spec(>=, 2).
-builtin_spec(=:=, 2).
-builtin_spec(=\=, 2).
-builtin_spec(var, 1).
-builtin_spec(nonvar, 1).
-builtin_spec(atom, 1).
-builtin_spec(integer, 1).
-builtin_spec(float, 1).
-builtin_spec(compound, 1).
-builtin_spec(atomic, 1).
-builtin_spec(functor, 3).
-builtin_spec(arg, 3).
-builtin_spec(=.., 2).
-builtin_spec(atom_chars, 2).
-builtin_spec(number_chars, 2).
-builtin_spec(length, 2).
-builtin_spec(append, 3).
-builtin_spec(member, 2).
+goal_shape_compound(Goal, F, A, Shape) :-
+    if_(F = (','),
+        if_(A = 2,
+            (   arg(1, Goal, G1),
+                arg(2, Goal, G2),
+                Shape = conjunction(G1, G2)
+            ),
+            goal_shape_other(Goal, F, A, Shape)),
+        goal_shape_other(Goal, F, A, Shape)).
+
+goal_shape_other(Goal, F, A, Shape) :-
+    if_(F = (';'),
+        if_(A = 2,
+            (   arg(1, Goal, G1),
+                arg(2, Goal, G2),
+                if_(is_arrow_t(G1),
+                    (   arg(1, G1, Cond),
+                        arg(2, G1, Then),
+                        Shape = if_then_else(Cond, Then, G2)
+                    ),
+                    Shape = disjunction(G1, G2))
+            ),
+            goal_shape_control(Goal, F, A, Shape)),
+        goal_shape_control(Goal, F, A, Shape)).
+
+is_arrow_t(Term, T) :-
+    functor(Term, F, A),
+    if_(F = (->),
+        if_(A = 2, T = true, T = false),
+        T = false).
+
+goal_shape_control(Goal, F, A, Shape) :-
+    if_(F = (->),
+        if_(A = 2,
+            (   arg(1, Goal, Cond),
+                arg(2, Goal, Then),
+                Shape = if_then(Cond, Then)
+            ),
+            goal_shape_ext(Goal, F, A, Shape)),
+        goal_shape_ext(Goal, F, A, Shape)).
+
+goal_shape_ext(Goal, F, A, Shape) :-
+    if_(F = if_,
+        if_(A = 3,
+            (   arg(1, Goal, C),
+                arg(2, Goal, T),
+                arg(3, Goal, E),
+                Shape = if_reif(C, T, E)
+            ),
+            goal_shape_meta(Goal, F, A, Shape)),
+        goal_shape_meta(Goal, F, A, Shape)).
+
+goal_shape_meta(Goal, F, A, Shape) :-
+    if_(F = (\+),
+        if_(A = 1,
+            (   arg(1, Goal, NegG),
+                Shape = negation(NegG)
+            ),
+            goal_shape_delimited(Goal, F, A, Shape)),
+        goal_shape_delimited(Goal, F, A, Shape)).
+
+goal_shape_delimited(Goal, F, A, Shape) :-
+    if_(F = reset,
+        if_(A = 3,
+            (   arg(1, Goal, RG),
+                arg(2, Goal, Ball),
+                arg(3, Goal, Cont),
+                Shape = reset(RG, Ball, Cont)
+            ),
+            goal_shape_shift(Goal, F, A, Shape)),
+        goal_shape_shift(Goal, F, A, Shape)).
+
+goal_shape_shift(Goal, F, A, Shape) :-
+    if_(F = shift,
+        if_(A = 1,
+            (   arg(1, Goal, Ball),
+                Shape = shift(Ball)
+            ),
+            goal_shape_atomic_or_builtin(Goal, Shape)),
+        goal_shape_atomic_or_builtin(Goal, Shape)).
+
+goal_shape_atomic_or_builtin(Goal, Shape) :-
+    if_(crowlog_builtin_t(Goal),
+        Shape = builtin(Goal),
+        Shape = user_clause(Goal)).
+
+%% crowlog_builtin_t(@Goal, -Truth)
+%  Pure reified identification of predicates absorbed directly by the host engine.
+crowlog_builtin_t(Goal, T) :-
+    functor(Goal, Name, Arity),
+    builtins_spec_list(Builtins),
+    memberd_t(b(Name, Arity), Builtins, T).
+
+builtins_spec_list([
+    b('=', 2), b('\\=', 2), b('==', 2), b('\\==', 2), b(dif, 2), b(is, 2),
+    b('<', 2), b('>', 2), b('=<', 2), b('>=', 2), b('=:=', 2), b('=\\=', 2),
+    b(var, 1), b(nonvar, 1), b(atom, 1), b(integer, 1), b(float, 1), b(compound, 1), b(atomic, 1),
+    b(functor, 3), b(arg, 3), b('=..', 2), b(atom_chars, 2), b(number_chars, 2),
+    b(length, 2), b(append, 3), b(member, 2)
+]).
 
 crowlog_call_builtin(Goal) :-
     call(Goal).
@@ -109,23 +196,49 @@ crowlog_clause(Head, Body, [Clause|_], Span) :-
 crowlog_clause(Head, Body, [_|Rest], Span) :-
     crowlog_clause(Head, Body, Rest, Span).
 
-match_clause(clause((H :- B), Meta), Head, Body, Span) :- !,
-    copy_term(clause_info(H, B, Meta), clause_info(Head, Body, MetaCopy)),
-    extract_meta_span(MetaCopy, Span).
-match_clause(clause(H, Meta), Head, true, Span) :-
-    copy_term(clause_info(H, Meta), clause_info(Head, MetaCopy)),
-    extract_meta_span(MetaCopy, Span).
+crowlog_clause(Head, Body, KB) :-
+    crowlog_clause(Head, Body, KB, _).
 
-extract_meta_span(meta(Items), Span) :- !,
-    meta_span(Items, Span).
-extract_meta_span(Span, Span).
+match_clause(clause(ClauseTerm, Meta), Head, Body, Span) :-
+    if_(is_rule_t(ClauseTerm),
+        (   arg(1, ClauseTerm, H),
+            arg(2, ClauseTerm, B),
+            copy_term(clause_info(H, B, Meta), clause_info(Head, Body, MetaCopy)),
+            extract_meta_span(MetaCopy, Span)
+        ),
+        (   H = ClauseTerm,
+            Body = true,
+            copy_term(clause_info(H, Meta), clause_info(Head, MetaCopy)),
+            extract_meta_span(MetaCopy, Span)
+        )).
+
+is_rule_t(Term, T) :-
+    functor(Term, F, A),
+    if_(F = (:-),
+        if_(A = 2, T = true, T = false),
+        T = false).
+
+extract_meta_span(Meta, Span) :-
+    if_(is_meta_t(Meta),
+        (   arg(1, Meta, Items),
+            meta_span(Items, Span)
+        ),
+        Span = Meta).
+
+is_meta_t(Term, T) :-
+    functor(Term, F, A),
+    if_(F = meta,
+        if_(A = 1, T = true, T = false),
+        T = false).
 
 meta_span([], no_span).
 meta_span([Item|Rest], Span) :-
-    (   Item = span(Span0) ->
-        Span = Span0
-    ;   meta_span(Rest, Span)
-    ).
+    if_(is_span_item_t(Item),
+        arg(1, Item, Span),
+        meta_span(Rest, Span)).
 
-crowlog_clause(Head, Body, KB) :-
-    crowlog_clause(Head, Body, KB, _).
+is_span_item_t(Term, T) :-
+    functor(Term, F, A),
+    if_(F = span,
+        if_(A = 1, T = true, T = false),
+        T = false).

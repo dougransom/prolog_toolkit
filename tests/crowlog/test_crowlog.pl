@@ -44,6 +44,16 @@ test("absorbed builtins execution", (
     crowlog_interpret((X is 2 + 3, X > 4, dif(X, 10)), KB)
 )).
 
+test("interpret pure reified if_ conditional", (
+    KB = [
+        clause((sign(N, S) :- if_(N = 0, S = zero, S = nonzero)), meta([]))
+    ],
+    crowlog_interpret(sign(0, S1), KB),
+    S1 = zero,
+    crowlog_interpret(sign(5, S2), KB),
+    S2 = nonzero
+)).
+
 run :-
     format("~n=== Running Crowlog Meta-Interpreter Tests ===~n", []),
     run_tests,
