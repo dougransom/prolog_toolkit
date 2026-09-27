@@ -166,12 +166,13 @@ The test suite is structured under `tests/`:
 
 ---
 
-## 6. Source-Provenance Meta-Interpreter & Debugger (Roadmap)
+## 6. Crowlog: Source-Provenance Meta-Interpreter & Debugger
 
 ### 6.1 Goal & Vision
-Build a pure, step-level meta-interpreter capable of executing user code and interpreted Scryer standard library modules (patched where needed). Leveraging the toolkit's reactive AST and provenance infrastructure, every goal invocation, unification, choicepoint, and reduction step retains its exact source location (`span(StartPos, EndPos)`), enabling:
+**Crowlog** (located in [`crowlog/`](file:///home/doug/code/prolog_toolkit/crowlog), with tests in [`tests/crowlog/`](file:///home/doug/code/prolog_toolkit/tests/crowlog)) is a pure, step-level meta-interpreter capable of executing user code and interpreted Scryer standard library modules (patched where needed). Leveraging the toolkit's reactive AST and provenance infrastructure, every goal invocation, unification, choicepoint, and reduction step retains its exact source location (`span(StartPos, EndPos)`), enabling:
 - **Execution Tracing & Step Debugging**: Inspect the proof tree interactively with full line/column context.
 - **Visual Derivation Trees**: Construct an explicit DAG or tree representation of the proof search for explanation and debugging.
+- **Isolated Testing Workflow**: Run `make test-crowlog` to test Crowlog in isolation during focused development without invoking the broader language parsing test matrix.
 
 ### 6.2 Host Engine Primitive Absorption
 To maintain high performance and avoid rewriting low-level abstract machine internals in Prolog:
