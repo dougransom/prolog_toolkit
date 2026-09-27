@@ -2,7 +2,8 @@
     crowlog_interpret/2,
     crowlog_interpret/3,
     crowlog_clause/3,
-    crowlog_clause/4
+    crowlog_clause/4,
+    extract_meta_span/2
 ]).
 
 /** <module> Crowlog: Source-Provenance Prolog Meta-Interpreter
