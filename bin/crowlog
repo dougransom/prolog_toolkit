@@ -3,21 +3,8 @@ set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Source user aliases so 'sp' alias is recognized in non-interactive shells
-if [ -f "$HOME/.bash_aliases" ]; then
-    shopt -s expand_aliases
-    # shellcheck source=/dev/null
-    . "$HOME/.bash_aliases"
-fi
-
+# Path to the crowlog top-level Prolog file
 TOPLEVEL_PL="$ROOT_DIR/crowlog/crowlog_toplevel.pl"
 
-if [ "$(type -t sp 2>/dev/null)" = "alias" ]; then
-    eval "sp -f -t crowlog_toplevel \"\$TOPLEVEL_PL\" \"\$@\""
-elif [ -x "$(type -P sp 2>/dev/null)" ]; then
-    exec sp -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
-elif command -v scryer-safe >/dev/null 2>&1; then
-    exec scryer-safe -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
-else
-    exec scryer-prolog -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
-fi
+# Execute scryer-safe with -f (no rc file) and -t (toplevel) flags, passing any user arguments.
+exec scryer-safe -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
