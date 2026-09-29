@@ -28,12 +28,14 @@ A pure, ISO-compliant lexical and syntactic analysis toolkit for the Prolog lang
 
 4. **ISO-Compatible & Provenance-Annotated Term Reading**
    - Full ISO-compliant `read_term/N` (e.g. `read_term/2,3`) supporting standard read options (`variables/1`, `variable_names/1`, `singletons/1`, etc.).
+   - Strict ISO error handling: Syntax and parsing errors throw ISO-standard `error(syntax_error(Detail), Context)` exception terms, embedding rich source and token provenance into `Context`.
    - `read_term_ex/N` extending standard reading with rich provenance and source origin metadata attached to terms, subterms, and variables via attributed variables:
      - **Token & Term Provenance**: Source spans, line/column offsets, and origin identifiers (file path, interactive toplevel, URL, or stream).
      - **Macro & Expansion Lineage**: When terms are generated through macro expansions (`term_expansion/2`, `goal_expansion/2`, DCG rules), metadata traces back to the original source term and locates the specific expansion rules/macros used.
 
 5. **Crowlog: Source-Provenance Meta-Interpreter & Debugger**
-   - Located in [`crowlog/`](file:///home/doug/code/prolog_toolkit/crowlog): A pure, step-level meta-interpreter capable of executing user code and interpreted Scryer standard library modules (patched if necessary).
+   - Located in [`crowlog/`](crowlog): A pure, step-level meta-interpreter capable of executing user code and interpreted Scryer standard library modules (patched if necessary).
+   - **Interactive Top-Level & Standard Term Representation**: An interactive REPL that adheres to pure, standard Prolog term representation for query answers and unhandled ISO error terms similar to Scryer Prolog.
    - **Execution Tracing & Step Debugging**: Inspect each reduction step, variable binding, choice point, and failure with line and column source spans attached directly to goals.
    - **Derivation Trees**: Construct explicit, visual proof trees / derivation DAGs linking each proof step to exact AST source positions.
    - **Host Engine Primitive Absorption**: The host Prolog engine absorbs core ISO primitives (unification `=`, control constructs `,`, `;`, `->`, arithmetic, metalogical tests) as well as low-level delimited control (`reset/3` and `shift/1` from `library(cont)`).
