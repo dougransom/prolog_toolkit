@@ -127,43 +127,86 @@ crowlog_toplevel(Files) :-
 %% crowlog_session(+InStream, +OutStream, +State0, -StateFinal)
 %  Executes a Crowlog REPL session over the given input and output streams.
 crowlog_session(InStream, OutStream, State0, StateFinal) :-
-    read_stream_chars(InStream, InChars),
-    crowlog_toplevel_string(InChars, State0, OutChars, StateFinal),
-    format(OutStream, "~s", [OutChars]),
-    flush_output(OutStream).
+    phrase(toplevel_banner_, BannerChars),
+    format(OutStream, "~s", [BannerChars]),
+    flush_output(OutStream),
+    crowlog_loop(InStream, OutStream, none, State0, StateFinal).
 
 %% crowlog_loop(+InStream, +OutStream, +State0, -StateFinal)
 %  Main REPL evaluation loop reading from InStream and writing to OutStream.
 crowlog_loop(InStream, OutStream, State0, StateFinal) :-
-    crowlog_session(InStream, OutStream, State0, StateFinal).
+    crowlog_loop(InStream, OutStream, none, State0, StateFinal).
 
-read_statement_from_stream(InStream, Lookahead, Chars) :-
-    if_(Lookahead = char(C),
-        C0 = C,
-        get_non_layout_char(InStream, C0)
-    ),
-    if_(C0 = end_of_file,
+crowlog_loop(InStream, OutStream, Lookahead, State0, StateFinal) :-
+    phrase(toplevel_prompt_, PromptChars),
+    format(OutStream, "~s", [PromptChars]),
+    flush_output(OutStream),
+    read_statement_from_stream(InStream, Lookahead, StmtChars),
+    if_(StmtChars = end_of_file,
+        (   phrase(toplevel_exit_, ExitChars),
+            format(OutStream, "~s", [ExitChars]),
+            flush_output(OutStream),
+            StateFinal = State0
+        ),
+        (   State0 = state(kb(_), ops(OpT), opts(_)),
+            (   parse_query_from_chars(StmtChars, OpT, Goal, VarNames, _)
+            ->  is_halt_t(Goal, HaltT),
+                if_(HaltT = true,
+                    (   phrase(toplevel_exit_, ExitChars),
+                        format(OutStream, "~s", [ExitChars]),
+                        flush_output(OutStream),
+                        StateFinal = State0
+                    ),
+                    (   is_eof_t(Goal, EofT),
+                        if_(EofT = true,
+                            (   phrase(toplevel_exit_, ExitChars),
+                                format(OutStream, "~s", [ExitChars]),
+                                flush_output(OutStream),
+                                StateFinal = State0
+                            ),
+                            (   handle_toplevel_input(InStream, OutStream, Goal, VarNames, State0, State1, NextLookahead),
+                                flush_output(OutStream),
+                                crowlog_loop(InStream, OutStream, NextLookahead, State1, StateFinal)
+                            )
+                        )
+                    ))
+            ;   format(OutStream, "   error(syntax_error(cannot_parse_term), toplevel:query).~n", []),
+                flush_output(OutStream),
+                crowlog_loop(InStream, OutStream, none, State0, StateFinal)
+            )
+        )).
+
+read_statement_from_stream(InStream, _Lookahead, Chars) :-
+    get_statement_from_stream(InStream, Chars).
+
+get_statement_from_stream(InStream, Chars) :-
+    get_line_to_chars(InStream, Line0, []),
+    if_(Line0 = [],
         Chars = end_of_file,
-        (   Chars = [C0|Rest],
-            if_(C0 = (';'),
-                Rest = [],
-                if_(C0 = ('.'),
-                    Rest = [],
-                    read_statement_body(InStream, Rest)
-                )
+        (   phrase(skip_layout_, Line0, Line1),
+            if_(Line1 = [],
+                get_statement_from_stream(InStream, Chars),
+                accumulate_statement(InStream, Line1, Chars)
             )
         )).
 
-read_statement_body(InStream, Chars) :-
-    get_char(InStream, C),
-    if_(C = end_of_file,
-        Chars = [],
-        (   Chars = [C|Rest],
-            if_(C = ('.'),
-                Rest = [],
-                read_statement_body(InStream, Rest)
-            )
+accumulate_statement(InStream, CurrentLine, Chars) :-
+    if_(is_complete_statement_t(CurrentLine),
+        Chars = CurrentLine,
+        (   get_line_to_chars(InStream, NextLine, []),
+            if_(NextLine = [],
+                Chars = CurrentLine,
+                (   append(CurrentLine, NextLine, Combined),
+                    accumulate_statement(InStream, Combined, Chars)
+                ))
         )).
+
+is_complete_statement_t(Chars, Truth) :-
+    if_(chars_contains_t(Chars, "."),
+        Truth = true,
+        if_(chars_contains_t(Chars, ";"),
+            Truth = true,
+            Truth = false)).
 
 %% handle_toplevel_input(+InStream, +OutStream, +Goal, +VarNames, +State0, -State1, -Lookahead)
 %  Routes toplevel commands or executes standard queries.
