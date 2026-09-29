@@ -63,6 +63,8 @@ crowlog_interpret_shape(if_reif(Cond, Then, Else), KB, proof(if_reif(T, BranchTr
         (   crowlog_interpret(Else, KB, ElseTree),
             BranchTree = else(ElseTree)
         )).
+crowlog_interpret_shape(call(CallGoal, Arity), KB, proof(step(CallGoal, builtin, SubTree))) :-
+    interpret_call(CallGoal, Arity, KB, SubTree).
 crowlog_interpret_shape(negation(Goal), KB, proof(negation(Goal))) :-
     \+ crowlog_interpret(Goal, KB, _).
 crowlog_interpret_shape(reset(Goal, Ball, Cont), KB, proof(reset(Goal))) :-
@@ -74,6 +76,29 @@ crowlog_interpret_shape(builtin(Goal), _, proof(step(Goal, builtin, proof(builti
 crowlog_interpret_shape(user_clause(Goal), KB, proof(step(Goal, Span, BodyTree))) :-
     crowlog_clause(Goal, Body, KB, Span),
     crowlog_interpret(Body, KB, BodyTree).
+
+interpret_call(CallGoal, 1, KB, SubTree) :-
+    arg(1, CallGoal, SubGoal),
+    crowlog_interpret(SubGoal, KB, SubTree).
+interpret_call(CallGoal, Arity, KB, SubTree) :-
+    Arity > 1,
+    CallGoal =.. [call, Closure|Args],
+    (   var(Closure) ->
+        throw(error(instantiation_error, call/Arity))
+    ;   number(Closure) ->
+        throw(error(type_error(callable, Closure), call/Arity))
+    ;   Closure = [_|_] ->
+        throw(error(type_error(callable, Closure), call/Arity))
+    ;   atom(Closure) ->
+        ConstructedGoal =.. [Closure|Args],
+        crowlog_interpret(ConstructedGoal, KB, SubTree)
+    ;   compound(Closure) ->
+        Closure =.. [CF|CArgs],
+        append(CArgs, Args, AllArgs),
+        ConstructedGoal =.. [CF|AllArgs],
+        crowlog_interpret(ConstructedGoal, KB, SubTree)
+    ;   throw(error(type_error(callable, Closure), call/Arity))
+    ).
 
 reified_call(true, true).
 reified_call(false, false).
@@ -88,9 +113,11 @@ reified_call(Cond, T) :-
 %  Classifies Goal into its execution shape using pure reified tests.
 goal_shape(Goal, Shape) :-
     (   var(Goal) ->
-        throw(error(instantiation_error, Goal))
+        throw(error(instantiation_error, call/1))
     ;   number(Goal) ->
-        throw(error(type_error(callable, Goal), Goal))
+        throw(error(type_error(callable, Goal), call/1))
+    ;   Goal = [_|_] ->
+        throw(error(type_error(callable, Goal), call/1))
     ;   functor(Goal, F, A),
         if_(F = true,
             if_(A = 0, Shape = true, goal_shape_compound(Goal, F, A, Shape)),
@@ -147,7 +174,15 @@ goal_shape_ext(Goal, F, A, Shape) :-
                 arg(3, Goal, E),
                 Shape = if_reif(C, T, E)
             ),
-            goal_shape_meta(Goal, F, A, Shape)),
+            goal_shape_call(Goal, F, A, Shape)),
+        goal_shape_call(Goal, F, A, Shape)).
+
+goal_shape_call(Goal, F, A, Shape) :-
+    if_(F = call,
+        (   A >= 1 ->
+            Shape = call(Goal, A)
+        ;   goal_shape_meta(Goal, F, A, Shape)
+        ),
         goal_shape_meta(Goal, F, A, Shape)).
 
 goal_shape_meta(Goal, F, A, Shape) :-

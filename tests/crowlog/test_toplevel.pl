@@ -272,6 +272,63 @@ test_6_syntax_error_recovery :-
 test_6_multiline_query :-
     assert_toplevel_contains("append([1],\n  [2],\n  Res\n).\nhalt.\n", ["Res = [1,2]"]).
 
+test_6_consult_nonexistent_file :-
+    assert_toplevel_contains("consult('nonexistent_fixture_file.pl').\nhalt.\n", [
+        "error(existence_error(source_sink,\"nonexistent_fixture_file.pl\"),open/4)."
+    ]).
+
+test_6_bracket_consult_nonexistent_file :-
+    assert_toplevel_contains("['nonexistent_fixture_file.pl'].\nhalt.\n", [
+        "error(existence_error(source_sink,\"nonexistent_fixture_file.pl\"),open/4)."
+    ]).
+
+test_6_consult_error_recovery :-
+    assert_toplevel_contains("consult('nonexistent_fixture_file.pl').\nA = 123.\nhalt.\n", [
+        "error(existence_error(source_sink,\"nonexistent_fixture_file.pl\"),open/4).",
+        "A = 123."
+    ]).
+
+test_6_call_number_type_error :-
+    assert_toplevel_contains("call(3).\nhalt.\n", [
+        "error(type_error(callable,3),call/1)."
+    ]).
+
+test_6_var_bind_call_number_type_error :-
+    assert_toplevel_contains("A=3, call(A).\nhalt.\n", [
+        "error(type_error(callable,3),call/1)."
+    ]).
+
+test_6_var_bind_meta_call_number_type_error :-
+    assert_toplevel_contains("A=3, A.\nhalt.\n", [
+        "error(type_error(callable,3),call/1)."
+    ]).
+
+test_6_var_bind_meta_call_list_type_error :-
+    assert_toplevel_contains("A=[1,2,3], A.\nhalt.\n", [
+        "error(type_error(callable,[1,2,3]),call/1)."
+    ]).
+
+test_6_var_bind_meta_call_open_list_type_error :-
+    assert_toplevel_contains("A=[X], A.\nhalt.\n", [
+        "error(type_error(callable,",
+        "call/1)."
+    ]).
+
+test_6_call_closure_evaluation :-
+    assert_toplevel_contains("call(dif, a, b).\nhalt.\n", [
+        "true."
+    ]).
+
+test_6_call_closure_var_error :-
+    assert_toplevel_contains("call(A, 1).\nhalt.\n", [
+        "error(instantiation_error,call/2)."
+    ]).
+
+test_6_call_closure_number_error :-
+    assert_toplevel_contains("call(3, 1).\nhalt.\n", [
+        "error(type_error(callable,3),call/2)."
+    ]).
+
 %% ============================================================================
 %% Runner
 %% ============================================================================
@@ -311,7 +368,18 @@ run :-
     run_test("tier 6: invalid operator syntax error (A =: 3)", test_6_invalid_operator),
     run_test("tier 6: syntax error recovery (A=: . then A = 42)", test_6_syntax_error_recovery),
     run_test("tier 6: multiline query formatting", test_6_multiline_query),
-    format("~n=== All 32 Crowlog Toplevel Tests Passed Successfully ===~n", []),
+    run_test("tier 6: consult nonexistent file reports existence_error", test_6_consult_nonexistent_file),
+    run_test("tier 6: bracket consult nonexistent file reports existence_error", test_6_bracket_consult_nonexistent_file),
+    run_test("tier 6: consult error recovery in session", test_6_consult_error_recovery),
+    run_test("tier 6: call(3) reports type_error", test_6_call_number_type_error),
+    run_test("tier 6: A=3, call(A) reports type_error", test_6_var_bind_call_number_type_error),
+    run_test("tier 6: A=3, A reports type_error", test_6_var_bind_meta_call_number_type_error),
+    run_test("tier 6: A=[1,2,3], A reports type_error", test_6_var_bind_meta_call_list_type_error),
+    run_test("tier 6: A=[X], A reports type_error", test_6_var_bind_meta_call_open_list_type_error),
+    run_test("tier 6: call(dif, a, b) evaluates closure", test_6_call_closure_evaluation),
+    run_test("tier 6: call(A, 1) reports instantiation_error", test_6_call_closure_var_error),
+    run_test("tier 6: call(3, 1) reports type_error", test_6_call_closure_number_error),
+    format("~n=== All 43 Crowlog Toplevel Tests Passed Successfully ===~n", []),
     flush_output,
     halt(0).
 

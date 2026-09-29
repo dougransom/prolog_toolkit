@@ -213,7 +213,11 @@ is_complete_statement_t(Chars, Truth) :-
 handle_toplevel_input(InStream, OutStream, Goal, VarNames, State0, State1, Lookahead) :-
     is_toplevel_command_t(Goal, IsCmd),
     if_(IsCmd = true,
-        (   dispatch_toplevel_command(Goal, State0, State1, MsgChars),
+        (   catch(
+                dispatch_toplevel_command(Goal, State0, State1, MsgChars),
+                Error,
+                (State1 = State0, phrase(toplevel_error_(Error), MsgChars))
+            ),
             format(OutStream, "~s", [MsgChars]),
             Lookahead = none
         ),
@@ -594,14 +598,18 @@ toplevel_exit_ -->
 toplevel_false_ -->
     format_("false.~n", []).
 
-toplevel_error_(error(Err, Ctx)) -->
-    format_("   error(~q, ~q).~n", [Err, Ctx]).
-toplevel_error_(error(Err)) -->
-    format_("   error(~q).~n", [Err]).
 toplevel_error_(Error) -->
-    { dif(Error, error(_, _)),
-      dif(Error, error(_)) },
-    format_("   error(~q).~n", [Error]).
+    { format_toplevel_error(Error, Chars) },
+    format_("   ~s.~n", [Chars]).
+
+format_toplevel_error(error(Err, Ctx), Chars) :-
+    !,
+    write_term_to_chars(error(Err, Ctx), [double_quotes(true), quoted(true)], Chars).
+format_toplevel_error(error(Err), Chars) :-
+    !,
+    write_term_to_chars(error(Err), [double_quotes(true), quoted(true)], Chars).
+format_toplevel_error(Error, Chars) :-
+    write_term_to_chars(error(Error), [double_quotes(true), quoted(true)], Chars).
 
 toplevel_opt_changed_(tree(true)) -->
     format_("% Derivation tree display enabled.~n", []).
@@ -701,7 +709,11 @@ skip_past_dot([_|Rest], Out) :-
 handle_toplevel_input_chars(Goal, VarNames, CharsIn, State0, OutChars, CharsOut, State1) :-
     is_toplevel_command_t(Goal, IsCmd),
     if_(IsCmd = true,
-        (   dispatch_toplevel_command(Goal, State0, State1, OutChars),
+        (   catch(
+                dispatch_toplevel_command(Goal, State0, State1, OutChars),
+                Error,
+                (State1 = State0, phrase(toplevel_error_(Error), OutChars))
+            ),
             CharsOut = CharsIn
         ),
         (   State1 = State0,
