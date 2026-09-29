@@ -2,19 +2,21 @@
 
 PROLOG ?= nice scryer-safe -f
 
-.PHONY: all test test-core test-crowlog crowlog test-module-loader test-all test-scryer-lib clean help
+.PHONY: all test test-core test-crowlog crowlog test-module-loader test-iso-conformity test-all test-scryer-lib update-reference clean help
 
 all: test
 
 help:
 	@echo "Available targets:"
-	@echo "  make test                Run consolidated core unit test suite"
-	@echo "  make test-core           Run consolidated core tests in a single process"
-	@echo "  make test-crowlog        Run Crowlog meta-interpreter & toplevel tests"
-	@echo "  make crowlog             Launch interactive Crowlog toplevel REPL"
-	@echo "  make test-module-loader  Run module loader tests (standalone on-demand/pre-checkin)"
-	@echo "  make test-all            Run consolidated core tests and module loader"
-	@echo "  make test-scryer-lib     Parse all Scryer standard library files in reference/scryer-prolog/src/lib"
+	@echo "  make test                 Run consolidated core unit test suite"
+	@echo "  make test-core            Run consolidated core tests in a single process"
+	@echo "  make test-crowlog         Run Crowlog meta-interpreter & toplevel tests"
+	@echo "  make crowlog              Launch interactive Crowlog toplevel REPL"
+	@echo "  make test-module-loader   Run module loader tests (standalone on-demand/pre-checkin)"
+	@echo "  make test-iso-conformity  Run ISO conformity test suite (from reference/scryer-prolog)"
+	@echo "  make test-all             Run core tests, Crowlog tests, module loader, and ISO tests"
+	@echo "  make test-scryer-lib      Parse all Scryer standard library files in reference/scryer-prolog/src/lib"
+	@echo "  make update-reference     Pull latest Scryer reference submodule"
 
 test: test-core
 
@@ -38,7 +40,16 @@ test-module-loader:
 	PROLOG_TIMEOUT=120s PROLOG_MEMORY_MAX=2G $(PROLOG) tests/test_module_loader.pl
 	@echo "=== Module Loader Tests Passed ==="
 
-test-all: test-core test-module-loader
+test-iso-conformity:
+	@echo "=== Running ISO Conformity Test Suite ==="
+	PROLOG_TIMEOUT=120s PROLOG_MEMORY_MAX=2G $(PROLOG) tests/test_iso_conformity.pl
+	@echo "=== ISO Conformity Tests Passed ==="
+
+update-reference:
+	@echo "=== Updating Scryer Reference Submodule ==="
+	git submodule update --remote --merge reference/scryer-prolog
+
+test-all: test-core test-crowlog test-module-loader test-iso-conformity
 
 test-scryer-lib:
 	@echo "=== Testing Parsing Across Scryer Standard Library ==="
