@@ -4,15 +4,13 @@ set -e
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOPLEVEL_PL="$ROOT_DIR/crowlog/crowlog_toplevel.pl"
 
-if command -v sp > /dev/null 2>&1; then
-    exec sp -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
-elif command -v scryer-safe > /dev/null 2>&1; then
-    exec scryer-safe -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
-elif command -v scryer-prolog > /dev/null 2>&1; then
-    exec scryer-prolog -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
+if command -v scryer-prolog > /dev/null 2>&1; then
+    exec scryer-prolog -f -t crowlog_toplevel "$TOPLEVEL_PL" -- "$@"
 elif [ -x "$HOME/code/scryer-prolog/target/release/scryer-prolog" ]; then
-    exec "$HOME/code/scryer-prolog/target/release/scryer-prolog" -f -t crowlog_toplevel "$TOPLEVEL_PL" "$@"
+    exec "$HOME/code/scryer-prolog/target/release/scryer-prolog" -f -t crowlog_toplevel "$TOPLEVEL_PL" -- "$@"
+elif command -v scryer-safe > /dev/null 2>&1; then
+    exec scryer-safe -f -t crowlog_toplevel "$TOPLEVEL_PL" -- "$@"
 else
-    echo "crowlog: could not find 'sp', 'scryer-safe', or 'scryer-prolog' in PATH"
+    echo "crowlog: could not find 'scryer-prolog' or 'scryer-safe' in PATH"
     exit 1
 fi

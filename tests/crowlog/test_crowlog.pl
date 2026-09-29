@@ -3,6 +3,7 @@
 ]).
 
 :- use_module(library(charsio)).
+:- use_module(library(dcgs)).
 :- use_module(library(dif)).
 :- use_module(library(format)).
 :- use_module(library(lists)).

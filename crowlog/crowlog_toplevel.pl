@@ -34,6 +34,7 @@ Commands:
 :- use_module(library(dif)).
 :- use_module(library(format)).
 :- use_module(library(lists)).
+:- use_module(library(os)).
 :- use_module(library(reif)).
 :- use_module(library(si)).
 
@@ -41,19 +42,11 @@ Commands:
     pos_line/2,
     pos_col/2
 ]).
-:- use_module('../src/prolog_lexer', [
-    prolog_tokens//1,
-    clause_tokens//1
-]).
+:- use_module('../src/prolog_lexer').
 :- use_module('../src/prolog_operator_table', [
     prolog_default_operator_table/1
 ]).
-:- use_module('../src/prolog_reactive_parser', [
-    prolog_parse_program//3,
-    prolog_parse_term//6,
-    prolog_initial_var_state/1,
-    prolog_var_state_bindings/4
-]).
+:- use_module('../src/prolog_reactive_parser').
 :- use_module('crowlog.pl').
 
 %% initial_toplevel_state(-State)
@@ -64,8 +57,54 @@ initial_toplevel_state(state(kb([]), ops(OpT), opts([tree(false), trace(false)])
 %% crowlog_toplevel
 %  Starts the interactive Crowlog REPL on standard input/output streams.
 crowlog_toplevel :-
-    initial_toplevel_state(State0),
-    crowlog_toplevel(State0).
+    (   catch(argv(RawArgs), _, RawArgs = []) ->
+        true
+    ;   RawArgs = []
+    ),
+    filter_toplevel_cli_args(RawArgs, Args),
+    if_(Args = [],
+        (   initial_toplevel_state(State0),
+            crowlog_toplevel(State0),
+            halt(0)
+        ),
+        (   initial_toplevel_state(State0),
+            consult_files(Args, State0, State1, MsgChars),
+            format("~s", [MsgChars]),
+            flush_output,
+            crowlog_toplevel(State1),
+            halt(0)
+        )).
+
+filter_toplevel_cli_args([], []).
+filter_toplevel_cli_args([Arg|Rest], Out) :-
+    file_spec_chars(Arg, ArgChars),
+    is_toplevel_script_arg_t(ArgChars, ScriptT),
+    if_(ScriptT = true,
+        filter_toplevel_cli_args(Rest, Out),
+        (   Out = [Arg|Tail],
+            filter_toplevel_cli_args(Rest, Tail)
+        )).
+
+is_toplevel_script_arg_t(Chars, Truth) :-
+    if_(Chars = "--",
+        Truth = true,
+        (   chars_contains_t(Chars, "crowlog_toplevel", C1),
+            if_(C1 = true,
+                Truth = true,
+                (   chars_contains_t(Chars, "bin/crowlog", C2),
+                    if_(C2 = true, Truth = true, Truth = false)
+                ))
+        )).
+
+chars_contains_t(Chars, Sub, Truth) :-
+    (   chars_contains(Chars, Sub) ->
+        Truth = true
+    ;   Truth = false
+    ).
+
+chars_contains(Chars, Sub) :-
+    append(_, Rest, Chars),
+    append(Sub, _, Rest).
 
 %% crowlog_toplevel(+Init)
 %  Starts Crowlog with an initial State or a list of files to consult on standard streams.
@@ -96,106 +135,164 @@ crowlog_session(InStream, OutStream, State0, StateFinal) :-
 %% crowlog_loop(+InStream, +OutStream, +State0, -StateFinal)
 %  Main REPL evaluation loop reading from InStream and writing to OutStream.
 crowlog_loop(InStream, OutStream, State0, StateFinal) :-
+    crowlog_loop(InStream, OutStream, none, State0, StateFinal).
+
+crowlog_loop(InStream, OutStream, Lookahead, State0, StateFinal) :-
     phrase(toplevel_prompt_, PromptChars),
     format(OutStream, "~s", [PromptChars]),
     flush_output(OutStream),
-    catch(
-        read_term(InStream, Goal0, [variable_names(VarNames0)]),
-        ReadError,
-        Goal0 = error(ReadError)
-    ),
-    if_(Goal0 = error(ReadErr),
-        (   format(OutStream, "Syntax error: ~q~n", [ReadErr]),
+    read_statement_from_stream(InStream, Lookahead, StmtChars),
+    if_(StmtChars = end_of_file,
+        (   phrase(toplevel_exit_, ExitChars),
+            format(OutStream, "~s", [ExitChars]),
             flush_output(OutStream),
-            crowlog_loop(InStream, OutStream, State0, StateFinal)
+            StateFinal = State0
         ),
-        (   Goal = Goal0,
-            VarNames = VarNames0,
-            if_(Goal = end_of_file,
-                (   phrase(toplevel_exit_, ExitChars),
-                    format(OutStream, "~s", [ExitChars]),
-                    flush_output(OutStream),
-                    StateFinal = State0
-                ),
-                if_(Goal = halt,
+        (   State0 = state(kb(_), ops(OpT), opts(_)),
+            (   parse_query_from_chars(StmtChars, OpT, Goal, VarNames, _)
+            ->  is_halt_t(Goal, HaltT),
+                if_(HaltT = true,
                     (   phrase(toplevel_exit_, ExitChars),
                         format(OutStream, "~s", [ExitChars]),
                         flush_output(OutStream),
                         StateFinal = State0
                     ),
-                    (   handle_toplevel_input(InStream, OutStream, Goal, VarNames, State0, State1),
-                        flush_output(OutStream),
-                        crowlog_loop(InStream, OutStream, State1, StateFinal)
-                    )))
+                    (   is_eof_t(Goal, EofT),
+                        if_(EofT = true,
+                            (   phrase(toplevel_exit_, ExitChars),
+                                format(OutStream, "~s", [ExitChars]),
+                                flush_output(OutStream),
+                                StateFinal = State0
+                            ),
+                            (   handle_toplevel_input(InStream, OutStream, Goal, VarNames, State0, State1, NextLookahead),
+                                flush_output(OutStream),
+                                crowlog_loop(InStream, OutStream, NextLookahead, State1, StateFinal)
+                            )
+                        )
+                    ))
+            ;   format(OutStream, "Syntax error: failed to parse term.~n", []),
+                flush_output(OutStream),
+                crowlog_loop(InStream, OutStream, none, State0, StateFinal)
+            )
         )).
 
-%% handle_toplevel_input(+InStream, +OutStream, +Goal, +VarNames, +State0, -State1)
-%  Routes toplevel commands or executes standard queries.
-handle_toplevel_input(_, OutStream, help, _, State, State) :-
-    phrase(toplevel_help_, Chars),
-    format(OutStream, "~s", [Chars]).
-handle_toplevel_input(_, OutStream, listing, _, State, State) :-
-    State = state(kb(KB), _, _),
-    phrase(listing_clauses_(KB), Chars),
-    format(OutStream, "~s", [Chars]).
-handle_toplevel_input(_, OutStream, listing(Spec), _, State, State) :-
-    State = state(kb(KB), _, _),
-    phrase(listing_clauses_matching_(Spec, KB), Chars),
-    format(OutStream, "~s", [Chars]).
-handle_toplevel_input(_, OutStream, tree, _, state(KB, Ops, Opts0), state(KB, Ops, Opts1)) :-
-    set_opt(tree(true), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(tree(true)), Chars),
-    format(OutStream, "~s", [Chars]).
-handle_toplevel_input(_, OutStream, notree, _, state(KB, Ops, Opts0), state(KB, Ops, Opts1)) :-
-    set_opt(tree(false), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(tree(false)), Chars),
-    format(OutStream, "~s", [Chars]).
-handle_toplevel_input(_, OutStream, trace, _, state(KB, Ops, Opts0), state(KB, Ops, Opts1)) :-
-    set_opt(trace(true), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(trace(true)), Chars),
-    format(OutStream, "~s", [Chars]).
-handle_toplevel_input(_, OutStream, notrace, _, state(KB, Ops, Opts0), state(KB, Ops, Opts1)) :-
-    set_opt(trace(false), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(trace(false)), Chars),
-    format(OutStream, "~s", [Chars]).
-handle_toplevel_input(_, OutStream, consult(File), _, State0, State1) :-
-    crowlog_consult(File, State0, State1, MsgChars),
-    format(OutStream, "~s", [MsgChars]).
-handle_toplevel_input(_, OutStream, [File|Files], _, State0, State1) :-
-    consult_files([File|Files], State0, State1, MsgChars),
-    format(OutStream, "~s", [MsgChars]).
-handle_toplevel_input(InStream, OutStream, Goal, VarNames, State, State) :-
-    dif(Goal, help),
-    dif(Goal, listing),
-    dif(Goal, listing(_)),
-    dif(Goal, tree),
-    dif(Goal, notree),
-    dif(Goal, trace),
-    dif(Goal, notrace),
-    dif(Goal, consult(_)),
-    dif(Goal, [_|_]),
-    crowlog_eval_query_interactive(InStream, OutStream, Goal, VarNames, State).
+read_statement_from_stream(InStream, Lookahead, Chars) :-
+    if_(Lookahead = char(C),
+        C0 = C,
+        get_non_layout_char(InStream, C0)
+    ),
+    if_(C0 = end_of_file,
+        Chars = end_of_file,
+        (   Chars = [C0|Rest],
+            read_statement_body(InStream, C0, Rest)
+        )).
 
-%% crowlog_eval_query_interactive(+InStream, +OutStream, +Goal, +VarNames, +State)
-%  Interactively executes Goal with on-demand backtracking prompt.
-crowlog_eval_query_interactive(InStream, OutStream, Goal, VarNames, State) :-
+read_statement_body(InStream, LastC, Chars) :-
+    if_(LastC = (';'),
+        Chars = [],
+        (   get_char(InStream, C),
+            if_(C = end_of_file,
+                Chars = [],
+                (   Chars = [C|Rest],
+                    if_(C = ('.'),
+                        Rest = [],
+                        read_statement_body(InStream, C, Rest)
+                    )
+                ))
+        )).
+
+%% handle_toplevel_input(+InStream, +OutStream, +Goal, +VarNames, +State0, -State1, -Lookahead)
+%  Routes toplevel commands or executes standard queries.
+handle_toplevel_input(InStream, OutStream, Goal, VarNames, State0, State1, Lookahead) :-
+    is_toplevel_command_t(Goal, IsCmd),
+    if_(IsCmd = true,
+        (   dispatch_toplevel_command(Goal, State0, State1, MsgChars),
+            format(OutStream, "~s", [MsgChars]),
+            Lookahead = none
+        ),
+        (   State1 = State0,
+            crowlog_eval_query_interactive(InStream, OutStream, Goal, VarNames, State0, Lookahead)
+        )).
+
+is_toplevel_command_t(Goal, Truth) :-
+    (   var(Goal) ->
+        Truth = false
+    ;   if_(Goal = help, Truth = true,
+        if_(Goal = listing, Truth = true,
+        if_(Goal = listing(_), Truth = true,
+        if_(Goal = tree, Truth = true,
+        if_(Goal = notree, Truth = true,
+        if_(Goal = trace, Truth = true,
+        if_(Goal = notrace, Truth = true,
+        if_(Goal = consult(_), Truth = true,
+        if_(Goal = [_|_], Truth = true,
+        Truth = false)))))))))
+    ).
+
+dispatch_toplevel_command(help, State, State, OutChars) :-
+    phrase(toplevel_help_, OutChars).
+dispatch_toplevel_command(listing, State, State, OutChars) :-
+    State = state(kb(KB), _, _),
+    phrase(listing_clauses_(KB), OutChars).
+dispatch_toplevel_command(listing(Spec), State, State, OutChars) :-
+    State = state(kb(KB), _, _),
+    phrase(listing_clauses_matching_(Spec, KB), OutChars).
+dispatch_toplevel_command(tree, state(KB, Ops, Opts0), state(KB, Ops, Opts1), OutChars) :-
+    set_opt(tree(true), Opts0, Opts1),
+    phrase(toplevel_opt_changed_(tree(true)), OutChars).
+dispatch_toplevel_command(notree, state(KB, Ops, Opts0), state(KB, Ops, Opts1), OutChars) :-
+    set_opt(tree(false), Opts0, Opts1),
+    phrase(toplevel_opt_changed_(tree(false)), OutChars).
+dispatch_toplevel_command(trace, state(KB, Ops, Opts0), state(KB, Ops, Opts1), OutChars) :-
+    set_opt(trace(true), Opts0, Opts1),
+    phrase(toplevel_opt_changed_(trace(true)), OutChars).
+dispatch_toplevel_command(notrace, state(KB, Ops, Opts0), state(KB, Ops, Opts1), OutChars) :-
+    set_opt(trace(false), Opts0, Opts1),
+    phrase(toplevel_opt_changed_(trace(false)), OutChars).
+dispatch_toplevel_command(consult(File), State0, State1, OutChars) :-
+    crowlog_consult(File, State0, State1, OutChars).
+dispatch_toplevel_command([File|Files], State0, State1, OutChars) :-
+    consult_files([File|Files], State0, State1, OutChars).
+
+%% crowlog_eval_query_interactive(+InStream, +OutStream, +Goal, +VarNames, +State, -Lookahead)
+%  Interactively executes Goal with deterministic vs choicepoint-aware answer formatting.
+crowlog_eval_query_interactive(InStream, OutStream, Goal, VarNames, State, Lookahead) :-
     State = state(kb(KB), _, opts(Opts)),
     catch(
-        (   crowlog_interpret(Goal, KB, Derivation),
-            phrase(answer_display_(VarNames, Derivation, Opts), AnsChars),
-            format(OutStream, "~s", [AnsChars]),
-            prompt_user_backtrack(InStream, OutStream, Action),
-            if_(Action = next,
-                fail,
-                true)
-        ;   phrase(toplevel_false_, FalseChars),
-            format(OutStream, "~s", [FalseChars])
-        ),
+        findall(ans(Deriv, VarNames), crowlog_interpret(Goal, KB, Deriv), Solutions),
         Error,
-        (   phrase(toplevel_error_(Error), ErrChars),
-            format(OutStream, "~s", [ErrChars])
-        )
-    ).
+        Solutions = exception(Error)
+    ),
+    if_(Solutions = exception(Err),
+        (   phrase(toplevel_error_(Err), ErrChars),
+            format(OutStream, "~s", [ErrChars]),
+            flush_output(OutStream),
+            Lookahead = none
+        ),
+        if_(Solutions = [],
+            (   phrase(toplevel_false_, FalseChars),
+                format(OutStream, "~s", [FalseChars]),
+                flush_output(OutStream),
+                Lookahead = none
+            ),
+            render_interactive_solutions(InStream, OutStream, Solutions, Opts, Lookahead))).
+
+render_interactive_solutions(_, OutStream, [ans(SingleDeriv, SingleVarNames)], Opts, none) :-
+    phrase(answer_display_(SingleVarNames, SingleDeriv, Opts), AnsChars),
+    format(OutStream, "~s.~n", [AnsChars]),
+    flush_output(OutStream).
+render_interactive_solutions(InStream, OutStream, [ans(Deriv1, VarNames1), ans(Deriv2, VarNames2)|More], Opts, Lookahead) :-
+    phrase(answer_display_(VarNames1, Deriv1, Opts), AnsChars),
+    format(OutStream, "~s", [AnsChars]),
+    flush_output(OutStream),
+    prompt_user_backtrack(InStream, OutStream, Action),
+    if_(Action = next,
+        render_interactive_solutions(InStream, OutStream, [ans(Deriv2, VarNames2)|More], Opts, Lookahead),
+        (   if_(Action = stop(char(C)),
+                Lookahead = char(C),
+                Lookahead = none
+            )
+        )).
 
 %% crowlog_eval_query(+Goal, +VarNames, +State0, -Derivation)
 %  Non-interactive query execution, returning the first derivation tree.
@@ -204,43 +301,74 @@ crowlog_eval_query(Goal, _, state(kb(KB), _, _), Derivation) :-
 
 prompt_user_backtrack(InStream, OutStream, Action) :-
     flush_output(OutStream),
-    get_char(InStream, C),
-    if_(C = end_of_file,
-        (   format(OutStream, "~n", []),
+    get_non_layout_char(InStream, C),
+    if_(C = (';'),
+        (   format(OutStream, ";~n", []),
             flush_output(OutStream),
-            Action = stop
+            Action = next
         ),
-        if_(C = (';'),
-            (   format(OutStream, ";~n", []),
-                flush_output(OutStream),
-                Action = next
-            ),
-            if_(C = ' ',
-                (   format(OutStream, ";~n", []),
-                    flush_output(OutStream),
-                    Action = next
-                ),
-                (   format(OutStream, "~n", []),
-                    flush_output(OutStream),
-                    Action = stop
-                )))).
+        (   format(OutStream, ".~n", []),
+            flush_output(OutStream),
+            if_(C = ('.'),
+                Action = stop(none),
+                if_(C = end_of_file,
+                    Action = stop(none),
+                    Action = stop(char(C))
+                )
+            )
+        )).
+
+get_non_layout_char(InStream, C) :-
+    get_char(InStream, C0),
+    if_(C0 = end_of_file,
+        C = end_of_file,
+        (   layout_char_t(C0, LayoutT),
+            if_(LayoutT = true,
+                get_non_layout_char(InStream, C),
+                C = C0)
+        )).
 
 answer_display_(VarNames, Derivation, Opts) -->
-    { if_(memberd_t(tree(true), Opts), ShowTree = true, ShowTree = false),
-      if_(VarNames = [], IsEmpty = true, IsEmpty = false) },
+    { memberd_t(tree(true), Opts, ShowTree),
+      filter_display_bindings(VarNames, DisplayBindings),
+      if_(DisplayBindings = [], IsEmpty = true, IsEmpty = false) },
     show_tree_(ShowTree, Derivation),
-    show_answer_(IsEmpty, VarNames).
+    show_answer_(IsEmpty, DisplayBindings).
+
+filter_display_bindings(VarNames, DisplayBindings) :-
+    maplist(var_binding_atom, VarNames, VarNamesAtoms),
+    filter_bindings_aux(VarNames, VarNamesAtoms, DisplayBindings).
+
+var_binding_atom(Name = Var, AtomName = Var) :-
+    name_chars(Name, Chars),
+    atom_chars(AtomName, Chars).
+
+filter_bindings_aux([], _, []).
+filter_bindings_aux([Name = Val|Rest], VarNamesAtoms, Out) :-
+    name_chars(Name, NameChars),
+    write_term_to_chars(Val, [quoted(true)], ValChars),
+    var_redundant_t(Val, NameChars, ValChars, RedundantT),
+    if_(RedundantT = true,
+        filter_bindings_aux(Rest, VarNamesAtoms, Out),
+        (   Out = [NameChars = ValChars|Tail],
+            filter_bindings_aux(Rest, VarNamesAtoms, Tail)
+        )).
+
+var_redundant_t(Val, NameChars, ValChars, T) :-
+    (   var(Val) ->
+        if_(NameChars = ValChars, T = true, T = false)
+    ;   T = false
+    ).
 
 show_tree_(true, Derivation) --> derivation_tree_(Derivation).
 show_tree_(false, _) --> [].
 
 show_answer_(true, _) --> format_("true", []).
-show_answer_(false, VarNames) --> print_bindings_(VarNames).
+show_answer_(false, Bindings) --> print_bindings_(Bindings).
 
 print_bindings_([]) --> [].
-print_bindings_([Name = Val|Rest]) -->
-    { name_chars(Name, Chars) },
-    format_("~s = ~q", [Chars, Val]),
+print_bindings_([NameChars = ValChars|Rest]) -->
+    format_("~s = ~s", [NameChars, ValChars]),
     binding_separator_(Rest).
 
 binding_separator_([]) --> [].
@@ -284,15 +412,17 @@ derivation_tree_indent_(Other, Indent) -->
     indent_spaces_(Indent),
     format_("|- ~q~n", [Other]).
 
+indent_spaces_(0) --> [].
 indent_spaces_(N) -->
-    { length(Spaces, N),
-      maplist(=(' '), Spaces) },
-    format_("~s", [Spaces]).
+    { N > 0, N1 is N - 1 },
+    " ",
+    indent_spaces_(N1).
 
 format_span(span(P1, P2), Chars) :-
-    pos_line(P1, L1), pos_col(P1, C1),
-    pos_line(P2, L2), pos_col(P2, C2),
-    phrase(format_("~d:~d - ~d:~d", [L1, C1, L2, C2]), Chars).
+    (   catch((pos_line(P1, L1), pos_col(P1, C1), pos_line(P2, L2), pos_col(P2, C2)), _, fail) ->
+        phrase(format_("~d:~d - ~d:~d", [L1, C1, L2, C2]), Chars)
+    ;   phrase(format_("~w - ~w", [P1, P2]), Chars)
+    ).
 format_span(builtin, "builtin").
 format_span(no_span, "no_span").
 format_span(Other, Chars) :-
@@ -328,7 +458,8 @@ file_spec_chars(File, Chars) :-
     name_chars(File, Chars).
 
 name_chars(Name, Chars) :-
-    if_(atom_t(Name),
+    atom_t(Name, AtomT),
+    if_(AtomT = true,
         atom_chars(Name, Chars),
         Chars = Name).
 
@@ -371,14 +502,17 @@ listing_clauses_matching_(_, []) --> [].
 listing_clauses_matching_(Spec, [clause(ClauseTerm, Meta)|Rest]) -->
     { clause_head(ClauseTerm, Head),
       functor(Head, Name, Arity),
-      if_((Spec = Name ; Spec = Name/Arity),
-          Matches = true,
-          Matches = false) },
+      spec_match_t(Spec, Name, Arity, Matches) },
     match_clause_emit_(Matches, ClauseTerm, Meta),
     listing_clauses_matching_(Spec, Rest).
 listing_clauses_matching_(Spec, [Other|Rest]) -->
     { dif(Other, clause(_, _)) },
     listing_clauses_matching_(Spec, Rest).
+
+spec_match_t(Spec, Name, Arity, Truth) :-
+    if_(Spec = Name,
+        Truth = true,
+        if_(Spec = Name/Arity, Truth = true, Truth = false)).
 
 match_clause_emit_(true, Term, Meta) --> format_clause_(Term, Meta).
 match_clause_emit_(false, _, _) --> [].
@@ -404,18 +538,18 @@ set_opt(Opt, [O|Rest], Out) :-
 toplevel_prompt_ --> "crowlog ?- ".
 
 toplevel_banner_ -->
-    format_("~n=== Crowlog: Source-Provenance Prolog REPL ===~n\
-Type 'help.' for commands, or 'halt.' to exit.~n~n", []).
+    format_("~n=== Crowlog: Source-Provenance Prolog REPL ===~n", []),
+    format_("Type 'help.' for commands, or 'halt.' to exit.~n~n", []).
 
 toplevel_help_ -->
-    format_("~nCrowlog Toplevel Commands:~n\
-  consult('file.pl'). / ['file.pl'].   Load clauses into KB~n\
-  listing.                             List all loaded clauses with spans~n\
-  listing(pred). / listing(pred/N).    List clauses for predicate~n\
-  tree. / notree.                      Toggle derivation tree display~n\
-  trace. / notrace.                    Toggle step execution tracing~n\
-  help.                                Display this help text~n\
-  halt.                                Exit Crowlog~n~n", []).
+    format_("~nCrowlog Toplevel Commands:~n", []),
+    format_("  consult('file.pl'). / ['file.pl'].   Load clauses into KB~n", []),
+    format_("  listing.                             List all loaded clauses with spans~n", []),
+    format_("  listing(pred). / listing(pred/N).    List clauses for predicate~n", []),
+    format_("  tree. / notree.                      Toggle derivation tree display~n", []),
+    format_("  trace. / notrace.                    Toggle step execution tracing~n", []),
+    format_("  help.                                Display this help text~n", []),
+    format_("  halt.                                Exit Crowlog~n~n", []).
 
 toplevel_exit_ -->
     format_("~nExiting Crowlog.~n", []).
@@ -423,7 +557,10 @@ toplevel_exit_ -->
 toplevel_false_ -->
     format_("false.~n", []).
 
+toplevel_error_(error(Err, _Ctx)) -->
+    format_("   error(~q).~n", [Err]).
 toplevel_error_(Error) -->
+    { dif(Error, error(_, _)) },
     format_("   error(~q).~n", [Error]).
 
 toplevel_opt_changed_(tree(true)) -->
@@ -453,6 +590,29 @@ crowlog_toplevel_string(InputChars, State0, OutputChars, StateFinal) :-
     crowlog_loop_chars(InputChars, State0, LoopChars, StateFinal),
     append(BannerChars, LoopChars, OutputChars).
 
+parse_query_from_chars(Chars, OpT, Goal, VarNames, CharsRest) :-
+    phrase(clause_tokens(Tokens), Chars, CharsRest),
+    prolog_initial_var_state(V0),
+    phrase(prolog_parse_term(OpT, 1200, GoalNode, _, V0, VFinal), Tokens, TokRest),
+    is_end_tok_rest(TokRest),
+    ast_to_raw_term(GoalNode, Goal),
+    prolog_var_state_bindings(VFinal, VarNames, _, _).
+
+is_end_tok_rest([end(_)]).
+is_end_tok_rest([end]).
+
+is_halt_t(Goal, Truth) :-
+    (   var(Goal) ->
+        Truth = false
+    ;   =(Goal, halt, Truth)
+    ).
+
+is_eof_t(Goal, Truth) :-
+    (   var(Goal) ->
+        Truth = false
+    ;   =(Goal, end_of_file, Truth)
+    ).
+
 crowlog_loop_chars(Chars0, State0, OutChars, StateFinal) :-
     phrase(skip_layout_, Chars0, Chars1),
     if_(Chars1 = [],
@@ -461,112 +621,99 @@ crowlog_loop_chars(Chars0, State0, OutChars, StateFinal) :-
             StateFinal = State0
         ),
         (   State0 = state(kb(_), ops(OpT0), opts(_)),
-            if_(phrase(clause_tokens(Tokens), Chars1, CharsRest),
-                (   prolog_initial_var_state(V0),
-                    if_(phrase(prolog_parse_term(OpT0, 1200, Goal, _, V0, VFinal), Tokens, _),
-                        (   prolog_var_state_bindings(VFinal, VarNames, _, _),
-                            if_(Goal = halt,
-                                (   phrase(toplevel_prompt_, PromptChars),
-                                    phrase(toplevel_exit_, ExitChars),
-                                    append(PromptChars, ExitChars, OutChars),
-                                    StateFinal = State0
-                                ),
-                                if_(Goal = end_of_file,
-                                    (   phrase(toplevel_prompt_, PromptChars),
-                                        phrase(toplevel_exit_, ExitChars),
-                                        append(PromptChars, ExitChars, OutChars),
-                                        StateFinal = State0
-                                    ),
-                                    (   phrase(toplevel_prompt_, PromptChars),
-                                        handle_toplevel_input_chars(Goal, VarNames, CharsRest, State0, StepOutChars, CharsNext, State1),
-                                        append(PromptChars, StepOutChars, HeaderChars),
-                                        crowlog_loop_chars(CharsNext, State1, TailChars, StateFinal),
-                                        append(HeaderChars, TailChars, OutChars)
-                                    )))
-                        ),
-                        (   phrase(toplevel_prompt_, PromptChars),
-                            phrase(format_("Syntax error: failed to parse term.~n", []), ErrChars),
-                            append(PromptChars, ErrChars, HeaderChars),
-                            crowlog_loop_chars(CharsRest, State0, TailChars, StateFinal),
-                            append(HeaderChars, TailChars, OutChars)
-                        ))
-                ),
-                (   phrase(toplevel_exit_, ExitChars),
-                    OutChars = ExitChars,
-                    StateFinal = State0
-                ))
+            (   parse_query_from_chars(Chars1, OpT0, Goal, VarNames, CharsRest)
+            ->  is_halt_t(Goal, HaltT),
+                if_(HaltT = true,
+                    (   phrase(toplevel_prompt_, PromptChars),
+                        phrase(toplevel_exit_, ExitChars),
+                        append(PromptChars, ExitChars, OutChars),
+                        StateFinal = State0
+                    ),
+                    (   is_eof_t(Goal, EofT),
+                        if_(EofT = true,
+                            (   phrase(toplevel_prompt_, PromptChars),
+                                phrase(toplevel_exit_, ExitChars),
+                                append(PromptChars, ExitChars, OutChars),
+                                StateFinal = State0
+                            ),
+                            (   phrase(toplevel_prompt_, PromptChars),
+                                handle_toplevel_input_chars(Goal, VarNames, CharsRest, State0, StepOutChars, CharsNext, State1),
+                                append(PromptChars, StepOutChars, HeaderChars),
+                                crowlog_loop_chars(CharsNext, State1, TailChars, StateFinal),
+                                append(HeaderChars, TailChars, OutChars)
+                            )
+                        )
+                    ))
+            ;   phrase(toplevel_prompt_, PromptChars),
+                phrase(format_("Syntax error: failed to parse term.~n", []), ErrChars),
+                append(PromptChars, ErrChars, HeaderChars),
+                phrase(skip_to_dot_, Chars1, CharsRest),
+                crowlog_loop_chars(CharsRest, State0, TailChars, StateFinal),
+                append(HeaderChars, TailChars, OutChars)
+            )
         )).
 
-handle_toplevel_input_chars(help, _, CharsRest, State, OutChars, CharsRest, State) :-
-    phrase(toplevel_help_, OutChars).
-handle_toplevel_input_chars(listing, _, CharsRest, State, OutChars, CharsRest, State) :-
-    State = state(kb(KB), _, _),
-    phrase(listing_clauses_(KB), OutChars).
-handle_toplevel_input_chars(listing(Spec), _, CharsRest, State, OutChars, CharsRest, State) :-
-    State = state(kb(KB), _, _),
-    phrase(listing_clauses_matching_(Spec, KB), OutChars).
-handle_toplevel_input_chars(tree, _, CharsRest, state(KB, Ops, Opts0), OutChars, CharsRest, state(KB, Ops, Opts1)) :-
-    set_opt(tree(true), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(tree(true)), OutChars).
-handle_toplevel_input_chars(notree, _, CharsRest, state(KB, Ops, Opts0), OutChars, CharsRest, state(KB, Ops, Opts1)) :-
-    set_opt(tree(false), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(tree(false)), OutChars).
-handle_toplevel_input_chars(trace, _, CharsRest, state(KB, Ops, Opts0), OutChars, CharsRest, state(KB, Ops, Opts1)) :-
-    set_opt(trace(true), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(trace(true)), OutChars).
-handle_toplevel_input_chars(notrace, _, CharsRest, state(KB, Ops, Opts0), OutChars, CharsRest, state(KB, Ops, Opts1)) :-
-    set_opt(trace(false), Opts0, Opts1),
-    phrase(toplevel_opt_changed_(trace(false)), OutChars).
-handle_toplevel_input_chars(consult(File), _, CharsRest, State0, OutChars, CharsRest, State1) :-
-    crowlog_consult(File, State0, State1, OutChars).
-handle_toplevel_input_chars([File|Files], _, CharsRest, State0, OutChars, CharsRest, State1) :-
-    consult_files([File|Files], State0, State1, OutChars).
-handle_toplevel_input_chars(Goal, VarNames, CharsIn, State, OutChars, CharsOut, State) :-
-    dif(Goal, help),
-    dif(Goal, listing),
-    dif(Goal, listing(_)),
-    dif(Goal, tree),
-    dif(Goal, notree),
-    dif(Goal, trace),
-    dif(Goal, notrace),
-    dif(Goal, consult(_)),
-    dif(Goal, [_|_]),
-    crowlog_eval_query_chars(Goal, VarNames, CharsIn, State, OutChars, CharsOut).
+skip_to_dot_ --> ['.'], !.
+skip_to_dot_ --> [_], skip_to_dot_.
+skip_to_dot_ --> [].
+
+handle_toplevel_input_chars(Goal, VarNames, CharsIn, State0, OutChars, CharsOut, State1) :-
+    is_toplevel_command_t(Goal, IsCmd),
+    if_(IsCmd = true,
+        (   dispatch_toplevel_command(Goal, State0, State1, OutChars),
+            CharsOut = CharsIn
+        ),
+        (   State1 = State0,
+            crowlog_eval_query_chars(Goal, VarNames, CharsIn, State0, OutChars, CharsOut)
+        )).
 
 crowlog_eval_query_chars(Goal, VarNames, CharsIn, State, OutChars, CharsOut) :-
     State = state(kb(KB), _, opts(Opts)),
     catch(
-        findall(Deriv, crowlog_interpret(Goal, KB, Deriv), Derivs),
+        findall(ans(Deriv, VarNames), crowlog_interpret(Goal, KB, Deriv), Solutions),
         Error,
-        Derivs = exception(Error)
+        Solutions = exception(Error)
     ),
-    if_(Derivs = exception(Err),
+    if_(Solutions = exception(Err),
         (   phrase(toplevel_error_(Err), OutChars),
             CharsOut = CharsIn
         ),
-        if_(Derivs = [],
+        if_(Solutions = [],
             (   phrase(toplevel_false_, OutChars),
                 CharsOut = CharsIn
             ),
-            render_solutions_chars(Derivs, VarNames, Opts, CharsIn, OutChars, CharsOut))).
+            render_solutions_chars(Solutions, Opts, CharsIn, OutChars, CharsOut))).
 
-render_solutions_chars([], _, _, CharsIn, OutChars, CharsIn) :-
+render_solutions_chars([], _, CharsIn, OutChars, CharsIn) :-
     phrase(toplevel_false_, OutChars).
-render_solutions_chars([Deriv|Rest], VarNames, Opts, CharsIn, OutChars, CharsOut) :-
+render_solutions_chars([ans(Deriv, VarNames)], Opts, CharsIn, OutChars, CharsOut) :-
+    phrase(answer_display_(VarNames, Deriv, Opts), AnsChars),
+    phrase(format_(".~n", []), DotChars),
+    append(AnsChars, DotChars, OutChars),
+    CharsOut = CharsIn.
+render_solutions_chars([ans(Deriv, VarNames), NextAns|Rest], Opts, CharsIn, OutChars, CharsOut) :-
     phrase(answer_display_(VarNames, Deriv, Opts), AnsChars),
     phrase(skip_layout_, CharsIn, CharsTrimmed),
-    if_(CharsTrimmed = [';'|CharsAfterSemi],
-        (   phrase(format_(";~n", []), SemiChars),
-            render_solutions_chars(Rest, VarNames, Opts, CharsAfterSemi, RestOutChars, CharsOut),
+    if_(head_is_semi_t(CharsTrimmed),
+        (   CharsTrimmed = [';'|CharsAfterSemi],
+            phrase(format_(";~n", []), SemiChars),
+            render_solutions_chars([NextAns|Rest], Opts, CharsAfterSemi, RestOutChars, CharsOut),
             append(AnsChars, SemiChars, Prefix),
             append(Prefix, RestOutChars, OutChars)
         ),
-        (   phrase(format_("~n", []), NLChars),
-            append(AnsChars, NLChars, OutChars),
+        (   phrase(format_(".~n", []), DotChars),
+            append(AnsChars, DotChars, OutChars),
             CharsOut = CharsTrimmed
         )).
 
-skip_layout_ --> [C], { layout_char_t(C, true) }, skip_layout_.
+head_is_semi_t([], false).
+head_is_semi_t([C|_], Truth) :-
+    =(C, ';', Truth).
+
+skip_layout_ --> " ", !, skip_layout_.
+skip_layout_ --> "\t", !, skip_layout_.
+skip_layout_ --> "\n", !, skip_layout_.
+skip_layout_ --> "\r", !, skip_layout_.
 skip_layout_ --> [].
 
 layout_char_t(C, T) :-

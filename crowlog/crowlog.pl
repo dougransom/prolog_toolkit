@@ -54,8 +54,8 @@ crowlog_interpret_shape(if_then_else(Cond, Then, Else), KB, proof(if_then_else(B
 crowlog_interpret_shape(if_then(Cond, Then), KB, proof(if_then(CondTree, ThenTree))) :-
     crowlog_interpret(Cond, KB, CondTree),
     crowlog_interpret(Then, KB, ThenTree).
-crowlog_interpret_shape(if_reif(Cond_t, Then, Else), KB, proof(if_reif(T, BranchTree))) :-
-    call(Cond_t, T),
+crowlog_interpret_shape(if_reif(Cond, Then, Else), KB, proof(if_reif(T, BranchTree))) :-
+    reified_call(Cond, T),
     if_(T = true,
         (   crowlog_interpret(Then, KB, ThenTree),
             BranchTree = then(ThenTree)
@@ -75,13 +75,27 @@ crowlog_interpret_shape(user_clause(Goal), KB, proof(step(Goal, Span, BodyTree))
     crowlog_clause(Goal, Body, KB, Span),
     crowlog_interpret(Body, KB, BodyTree).
 
+reified_call(true, true).
+reified_call(false, false).
+reified_call(fail, false).
+reified_call(Cond, T) :-
+    dif(Cond, true),
+    dif(Cond, false),
+    dif(Cond, fail),
+    call(Cond, T).
+
 %% goal_shape(+Goal, -Shape)
 %  Classifies Goal into its execution shape using pure reified tests.
 goal_shape(Goal, Shape) :-
-    functor(Goal, F, A),
-    if_(F = true,
-        if_(A = 0, Shape = true, goal_shape_compound(Goal, F, A, Shape)),
-        goal_shape_compound(Goal, F, A, Shape)).
+    (   var(Goal) ->
+        throw(error(instantiation_error, Goal))
+    ;   number(Goal) ->
+        throw(error(type_error(callable, Goal), Goal))
+    ;   functor(Goal, F, A),
+        if_(F = true,
+            if_(A = 0, Shape = true, goal_shape_compound(Goal, F, A, Shape)),
+            goal_shape_compound(Goal, F, A, Shape))
+    ).
 
 goal_shape_compound(Goal, F, A, Shape) :-
     if_(F = (','),
@@ -98,7 +112,8 @@ goal_shape_other(Goal, F, A, Shape) :-
         if_(A = 2,
             (   arg(1, Goal, G1),
                 arg(2, Goal, G2),
-                if_(is_arrow_t(G1),
+                is_arrow_t(G1, ArrowT),
+                if_(ArrowT = true,
                     (   arg(1, G1, Cond),
                         arg(2, G1, Then),
                         Shape = if_then_else(Cond, Then, G2)
@@ -165,7 +180,8 @@ goal_shape_shift(Goal, F, A, Shape) :-
         goal_shape_atomic_or_builtin(Goal, Shape)).
 
 goal_shape_atomic_or_builtin(Goal, Shape) :-
-    if_(crowlog_builtin_t(Goal),
+    crowlog_builtin_t(Goal, BuiltinT),
+    if_(BuiltinT = true,
         Shape = builtin(Goal),
         Shape = user_clause(Goal)).
 
@@ -201,7 +217,8 @@ crowlog_clause(Head, Body, KB) :-
     crowlog_clause(Head, Body, KB, _).
 
 match_clause(clause(ClauseTerm, Meta), Head, Body, Span) :-
-    if_(is_rule_t(ClauseTerm),
+    is_rule_t(ClauseTerm, RuleT),
+    if_(RuleT = true,
         (   arg(1, ClauseTerm, H),
             arg(2, ClauseTerm, B),
             copy_term(clause_info(H, B, Meta), clause_info(Head, Body, MetaCopy)),
@@ -220,7 +237,8 @@ is_rule_t(Term, T) :-
         T = false).
 
 extract_meta_span(Meta, Span) :-
-    if_(is_meta_t(Meta),
+    is_meta_t(Meta, MetaT),
+    if_(MetaT = true,
         (   arg(1, Meta, Items),
             meta_span(Items, Span)
         ),
@@ -234,7 +252,8 @@ is_meta_t(Term, T) :-
 
 meta_span([], no_span).
 meta_span([Item|Rest], Span) :-
-    if_(is_span_item_t(Item),
+    is_span_item_t(Item, SpanT),
+    if_(SpanT = true,
         arg(1, Item, Span),
         meta_span(Rest, Span)).
 
