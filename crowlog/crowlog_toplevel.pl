@@ -7,6 +7,8 @@
     crowlog_eval_query/4,
     crowlog_consult/3,
     crowlog_consult/4,
+    resolve_consult_file/2,
+    crowlog_library_search_paths/1,
     print_derivation_tree/1,
     derivation_tree_chars/2,
     derivation_tree_//1,
@@ -36,6 +38,7 @@ Commands:
 :- use_module(library(charsio)).
 :- use_module(library(dcgs)).
 :- use_module(library(dif)).
+:- use_module(library(files)).
 :- use_module(library(format)).
 :- use_module(library(lists)).
 :- use_module(library(os)).
@@ -481,13 +484,100 @@ crowlog_consult(FileSpec, State0, State1) :-
 %% crowlog_consult(+FileSpec, +State0, -State1, -MsgChars)
 %  Parses and loads clauses from FileSpec into the KB, returning confirmation chars.
 crowlog_consult(FileSpec, state(kb(KB0), ops(OpT0), opts(Opts)), state(kb(KB1), ops(OpT1), opts(Opts)), MsgChars) :-
-    file_spec_chars(FileSpec, PathChars),
+    resolve_consult_file(FileSpec, PathChars),
     read_file_to_chars(PathChars, Chars),
     phrase(prolog_tokens(Tokens), Chars),
     phrase(prolog_parse_program(OpT0, Clauses, OpT1), Tokens),
     append(KB0, Clauses, KB1),
     length(Clauses, N),
     phrase(toplevel_consult_msg_(PathChars, N), MsgChars).
+
+resolve_consult_file(library(Lib), ResolvedPath) :-
+    !,
+    crowlog_library_search_paths(SearchPaths),
+    spec_to_subpath(Lib, SubPath),
+    (   find_in_search_paths(SearchPaths, SubPath, ResolvedPath) ->
+        true
+    ;   throw(error(existence_error(source_sink, library(Lib)), consult/1))
+    ).
+resolve_consult_file(FileSpec, ResolvedPath) :-
+    file_spec_chars(FileSpec, PathChars),
+    (   file_exists(PathChars) ->
+        ResolvedPath = PathChars
+    ;   ensure_pl_extension(PathChars, Candidate),
+        file_exists(Candidate) ->
+        ResolvedPath = Candidate
+    ;   % If not found in current dir, check library search paths as fallback
+        crowlog_library_search_paths(SearchPaths),
+        find_in_search_paths(SearchPaths, PathChars, FoundPath) ->
+        ResolvedPath = FoundPath
+    ;   ResolvedPath = PathChars
+    ).
+
+crowlog_library_search_paths(Paths) :-
+    (   catch(getenv("CROWLOG_LIBRARY_PATH", Val), _, fail),
+        dif(Val, "") ->
+        split_path_list(Val, Paths)
+    ;   % Default fallback paths: reference scryer-prolog lib, then crowlog/lib
+        Paths = ["reference/scryer-prolog/src/lib", "crowlog/lib"]
+    ).
+
+split_path_list(Chars, Paths) :-
+    split_path_list_(Chars, [], Paths).
+
+split_path_list_([], Acc, [Path]) :-
+    reverse(Acc, Path).
+split_path_list_([C|Cs], Acc, Out) :-
+    if_(=(C, ':'),
+        ( reverse(Acc, Path),
+          Out = [Path|Rest],
+          split_path_list_(Cs, [], Rest)
+        ),
+        split_path_list_(Cs, [C|Acc], Out)
+    ).
+
+find_in_search_paths([], _, _) :- fail.
+find_in_search_paths([Dir|Dirs], SubPath, ResolvedPath) :-
+    join_dir_file(Dir, SubPath, Candidate),
+    ensure_pl_extension(Candidate, PlPath),
+    (   file_exists(PlPath) ->
+        ResolvedPath = PlPath
+    ;   file_exists(Candidate) ->
+        ResolvedPath = Candidate
+    ;   find_in_search_paths(Dirs, SubPath, ResolvedPath)
+    ).
+
+ensure_pl_extension(Path, Out) :-
+    (   append(_, ".pl", Path) ->
+        Out = Path
+    ;   append(Path, ".pl", Out)
+    ).
+
+join_dir_file(Dir, File, Out) :-
+    if_(Dir = ".",
+        Out = File,
+        if_(Dir = "",
+            Out = File,
+            if_(ends_with_slash_t(Dir),
+                append(Dir, File, Out),
+                ( append(Dir, "/", DirSlash), append(DirSlash, File, Out) )
+            )
+        )
+    ).
+
+ends_with_slash_t([], false).
+ends_with_slash_t([C|Cs], T) :- ends_with_slash_t_(Cs, C, T).
+
+ends_with_slash_t_([], C, T) :- =(C, '/', T).
+ends_with_slash_t_([C|Cs], _, T) :- ends_with_slash_t_(Cs, C, T).
+
+spec_to_subpath(A/B, SubPath) :- !,
+    spec_to_subpath(A, SubA),
+    spec_to_subpath(B, SubB),
+    append(SubA, "/", Temp),
+    append(Temp, SubB, SubPath).
+spec_to_subpath(AtomOrChars, SubPath) :-
+    name_chars(AtomOrChars, SubPath).
 
 consult_files([], State, State, "").
 consult_files([File|Rest], State0, State2, MsgChars) :-
@@ -585,12 +675,16 @@ toplevel_banner_ -->
 toplevel_help_ -->
     format_("~nCrowlog Toplevel Commands:~n", []),
     format_("  consult('file.pl'). / ['file.pl'].   Load clauses into KB~n", []),
+    format_("  consult(library(lib)).               Load clauses from library path~n", []),
     format_("  listing.                             List all loaded clauses with spans~n", []),
     format_("  listing(pred). / listing(pred/N).    List clauses for predicate~n", []),
     format_("  tree. / notree.                      Toggle derivation tree display~n", []),
     format_("  trace. / notrace.                    Toggle step execution tracing~n", []),
     format_("  help.                                Display this help text~n", []),
-    format_("  halt.                                Exit Crowlog~n~n", []).
+    format_("  halt.                                Exit Crowlog~n~n", []),
+    format_("Environment Variables:~n", []),
+    format_("  CROWLOG_LIBRARY_PATH                 Colon-separated library search paths~n", []),
+    format_("                                       (default: reference/scryer-prolog/src/lib:crowlog/lib)~n~n", []).
 
 toplevel_exit_ -->
     format_("~nExiting Crowlog.~n", []).

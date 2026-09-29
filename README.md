@@ -36,6 +36,7 @@ A pure, ISO-compliant lexical and syntactic analysis toolkit for the Prolog lang
 5. **Crowlog: Source-Provenance Meta-Interpreter & Debugger**
    - Located in [`crowlog/`](crowlog): A pure, step-level meta-interpreter capable of executing user code and interpreted Scryer standard library modules (patched if necessary).
    - **Interactive Top-Level & Standard Term Representation**: An interactive REPL that adheres to pure, standard Prolog term representation for query answers and unhandled ISO error terms similar to Scryer Prolog.
+   - **Library Search Paths**: Configurable via `CROWLOG_LIBRARY_PATH` (defaults to `reference/scryer-prolog/src/lib:crowlog/lib`) for `consult(library(...))` and `[library(...)]`.
    - **Execution Tracing & Step Debugging**: Inspect each reduction step, variable binding, choice point, and failure with line and column source spans attached directly to goals.
    - **Derivation Trees**: Construct explicit, visual proof trees / derivation DAGs linking each proof step to exact AST source positions.
    - **Host Engine Primitive Absorption**: The host Prolog engine absorbs core ISO primitives (unification `=`, control constructs `,`, `;`, `->`, arithmetic, metalogical tests) as well as low-level delimited control (`reset/3` and `shift/1` from `library(cont)`).

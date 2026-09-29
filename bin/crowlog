@@ -4,6 +4,12 @@ set -e
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOPLEVEL_PL="$ROOT_DIR/crowlog/crowlog_toplevel.pl"
 
+# Default CROWLOG_LIBRARY_PATH to the Scryer Prolog standard library source in reference submodule,
+# followed by Crowlog's own lib/ directory if not explicitly set by the user.
+if [ -z "$CROWLOG_LIBRARY_PATH" ]; then
+    export CROWLOG_LIBRARY_PATH="$ROOT_DIR/reference/scryer-prolog/src/lib:$ROOT_DIR/crowlog/lib"
+fi
+
 if command -v scryer-prolog > /dev/null 2>&1; then
     exec scryer-prolog -f -t crowlog_toplevel "$TOPLEVEL_PL" -- "$@"
 elif [ -x "$HOME/code/scryer-prolog/target/release/scryer-prolog" ]; then
@@ -14,3 +20,4 @@ else
     echo "crowlog: could not find 'scryer-prolog' or 'scryer-safe' in PATH"
     exit 1
 fi
+

@@ -189,7 +189,27 @@ test_3_multi_goal :-
 test_4_help :-
     assert_toplevel_contains("help.\nhalt.\n", [
         "Crowlog Toplevel Commands:",
-        "listing(pred). / listing(pred/N)."
+        "consult(library(lib)).",
+        "listing(pred). / listing(pred/N).",
+        "CROWLOG_LIBRARY_PATH"
+    ]).
+
+test_4_consult_library_crowlog_lib :-
+    assert_toplevel_contains("[library(sample_lib)].\ncrowlog_lib_item(X).\nhalt.\n", [
+        "sample_lib.pl",
+        "X = crowlog_lib_ok."
+    ]).
+
+test_4_consult_library_search_paths :-
+    crowlog_library_search_paths(Paths),
+    member("crowlog/lib", Paths),
+    member("reference/scryer-prolog/src/lib", Paths),
+    resolve_consult_file(library(sample_lib), Found),
+    chars_contains(Found, "sample_lib.pl").
+
+test_4_consult_nonexistent_library :-
+    assert_toplevel_contains("consult(library(nonexistent_xyz)).\nhalt.\n", [
+        "error(existence_error(source_sink,library(nonexistent_xyz)),consult/1)."
     ]).
 
 test_4_opts :-
@@ -355,6 +375,9 @@ run :-
     run_test("tier 3: early termination without backtracking", test_3_early_termination),
     run_test("tier 3: multi-goal backtracking (append/3)", test_3_multi_goal),
     run_test("tier 4: help command", test_4_help),
+    run_test("tier 4: consult library from crowlog/lib", test_4_consult_library_crowlog_lib),
+    run_test("tier 4: consult library search paths resolution", test_4_consult_library_search_paths),
+    run_test("tier 4: consult nonexistent library error", test_4_consult_nonexistent_library),
     run_test("tier 4: option toggles (tree and trace)", test_4_opts),
     run_test("tier 4: listing clauses from KB", test_4_listing),
     run_test("tier 5: proof tree rendering in toplevel session", test_5_proof_tree),
@@ -379,7 +402,7 @@ run :-
     run_test("tier 6: call(dif, a, b) evaluates closure", test_6_call_closure_evaluation),
     run_test("tier 6: call(A, 1) reports instantiation_error", test_6_call_closure_var_error),
     run_test("tier 6: call(3, 1) reports type_error", test_6_call_closure_number_error),
-    format("~n=== All 43 Crowlog Toplevel Tests Passed Successfully ===~n", []),
+    format("~n=== All 46 Crowlog Toplevel Tests Passed Successfully ===~n", []),
     flush_output,
     halt(0).
 
