@@ -9,6 +9,26 @@ Crowlog is an interactive toplevel and pure step-level meta-interpreter with sou
 - **Pure Reified & Control Interpretation**: Host-delegated arithmetic, metalogical tests, delimited control (`reset/3`, `shift/1`), and native reified `if_/3` without procedural cuts.
 - **Modular Library Resolution**: Supports loading installed libraries and Scryer Prolog standard library modules via `consult(library(...))` or `[library(...)]`.
 
+## Host Absorption vs. Interpreted Module Isolation
+
+Crowlog strictly distinguishes between modules loaded by the host engine to implement Crowlog and modules available to interpreted user programs:
+
+- **Host-Absorbed Primitives Only**: The host Prolog engine absorbs only a well-defined minimal set of primitives required for core execution, arithmetic, metalogical reflection, and pure control.
+- **Environment Isolation**: Modules loaded by the host (e.g. `library(charsio)`, `library(os)`, `library(files)`) are **not** implicitly exposed to interpreted programs.
+- **Interpreted Library Loading**: Interpreted programs must explicitly consult library modules (e.g. `consult(library(lists))` or `consult(library(reif))`), which are parsed and interpreted directly inside Crowlog's in-memory Knowledge Base (KB), retaining full source provenance and derivation tree tracking.
+
+### Explicit Inventory of Host-Absorbed Built-ins
+
+| Category | Absorbed Host Primitives |
+| :--- | :--- |
+| **Control & Logic** | `=`, `\=`, `==`, `\==`, `dif/2`, `true/0`, `fail/0`, `false/0`, `,/2`, `;/2`, `!/0`, `->/2`, `*->/2`, `\+/1`, `call/1..N` |
+| **Pure Conditionals** | `if_/3` (core conditional dispatch) |
+| **Arithmetic** | `is/2`, `</2`, `>/2`, `=</2`, `>=/2`, `=:=/2`, `=\=/2` |
+| **Term Inspection & Metalogical** | `var/1`, `nonvar/1`, `atom/1`, `integer/1`, `float/1`, `compound/1`, `atomic/1`, `functor/3`, `arg/3`, `=../2`, `atom_chars/2`, `number_chars/2` |
+| **Delimited Control** | `reset/3`, `shift/1` (via `library(cont)`) |
+
+All other predicates and modules (e.g. `pairs`, `assoc`, `lists`, `ordsets`, custom reified library predicates) must be loaded into Crowlog and executed through the interpreter.
+
 ## Environment Variables & Library Search Paths
 
 Crowlog uses the `CROWLOG_LIBRARY_PATH` environment variable to locate libraries when consulting modules (e.g. `consult(library(lists))` or `[library(sample_lib)]`):

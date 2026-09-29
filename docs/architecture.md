@@ -174,8 +174,18 @@ The test suite is structured under `tests/`:
 - **Visual Derivation Trees**: Construct an explicit DAG or tree representation of the proof search for explanation and debugging.
 - **Isolated Testing Workflow**: Run `make test-crowlog` to test Crowlog in isolation during focused development without invoking the broader language parsing test matrix.
 
-### 6.2 Host Engine Primitive Absorption
+### 6.2 Host Engine Primitive Absorption & Environment Isolation
 To maintain high performance and avoid rewriting low-level abstract machine internals in Prolog:
-- **Core ISO Primitives**: Unification (`=`), control structures (`,`, `;`, `->`, `*->`, `!`), arithmetic (`is`, `<`, `>`, etc.), and metalogical tests (`var/1`, `functor/3`, `arg/3`, `=..`) are absorbed directly by the host engine.
-- **Delimited Control (`reset/3` and `shift/1`)**: Absorbed by the host engine. Because `shift` and `reset` in Scryer Prolog manipulate Rust WAM call-frame environments and continuation registers directly (`$reset_cont_marker`, `$unwind_environments`), delegating to the host allows the host to capture the continuation of the running meta-interpreter while preserving source provenance on all standard goal steps.
+- **Core ISO Primitives**: Unification (`=`, `\=`, `==`, `\==`), pure inequality (`dif/2`), control structures (`,`, `;`, `->`, `*->`, `!`), negation (`\+/1`), meta-call (`call/1..N`), arithmetic (`is`, `<`, `>`, `=<`, `>=`, `=:=`, `=\=`), and metalogical tests (`var/1`, `nonvar/1`, `atom/1`, `integer/1`, `float/1`, `compound/1`, `atomic/1`, `functor/3`, `arg/3`, `=../2`, `atom_chars/2`, `number_chars/2`) are absorbed directly by the host engine.
+- **Delimited Control (`reset/3` and `shift/1`)**: Absorbed by the host engine (via `library(cont)`). Because `shift` and `reset` in Scryer Prolog manipulate Rust WAM call-frame environments and continuation registers directly (`$reset_cont_marker`, `$unwind_environments`), delegating to the host allows the host to capture the continuation of the running meta-interpreter while preserving source provenance on all standard goal steps.
+- **Pure Reified Conditional (`if_/3`)**: Treated as a first-class control construct in the interpreter.
+- **Environment Isolation**: Modules loaded by the host to implement Crowlog (e.g., `library(charsio)`, `library(os)`, `library(files)`) are **not** implicitly exposed to interpreted programs.
+
+### 6.3 Interpreted Library Loading & Strategy for `reif`
+- **Interpreted Modules**: All standard and third-party libraries (e.g. `pairs`, `assoc`, `lists`, `ordsets`) must be loaded via `consult(library(...))` or `[library(...)]` through `CROWLOG_LIBRARY_PATH`, where their clauses are parsed and added to Crowlog's internal Knowledge Base (KB).
+- **Strategy for `reif`**:
+  1. *Core Control*: `if_/3` is recognized as a built-in control construct in `goal_shape/2` and dispatched natively.
+  2. *Primitive Reification*: Primitive tests (`=(X, Y, Truth)`, `dif(X, Y, Truth)`, truth constants `true`/`false`) are evaluated directly.
+  3. *Interpreted Reified Predicates*: Higher-order and library reified predicates (such as `memberd_t/3`, `tfilter/3`, `tpartition/4`) are parsed and interpreted within Crowlog's KB so that their execution steps participate in execution tracing and derivation tree provenance.
+
 

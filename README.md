@@ -39,7 +39,7 @@ A pure, ISO-compliant lexical and syntactic analysis toolkit for the Prolog lang
    - **Library Search Paths**: Configurable via `CROWLOG_LIBRARY_PATH` (defaults to `reference/scryer-prolog/src/lib:crowlog/lib`) for `consult(library(...))` and `[library(...)]`.
    - **Execution Tracing & Step Debugging**: Inspect each reduction step, variable binding, choice point, and failure with line and column source spans attached directly to goals.
    - **Derivation Trees**: Construct explicit, visual proof trees / derivation DAGs linking each proof step to exact AST source positions.
-   - **Host Engine Primitive Absorption**: The host Prolog engine absorbs core ISO primitives (unification `=`, control constructs `,`, `;`, `->`, arithmetic, metalogical tests) as well as low-level delimited control (`reset/3` and `shift/1` from `library(cont)`).
+   - **Host Engine Primitive Absorption & Environment Isolation**: The host Prolog engine absorbs only core ISO primitives (`=`, control constructs, `dif/2`, arithmetic, metalogical reflection, delimited control `reset`/`shift`, and pure reified `if_/3`). Host-loaded modules are **not** leaked to user code; standard libraries and user modules are parsed and interpreted in Crowlog's internal KB with full derivation trees.
 
 ## Running Tests
 

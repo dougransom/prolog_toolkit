@@ -11,9 +11,18 @@
 Crowlog is an execution and debugging engine that executes parsed Prolog clauses
 while tracking source positions, choice points, and derivation trees.
 
-Host engine absorbs:
-- Core ISO primitives: unification (=), true, fail, control constructs (',', ';', '->', '*->', '!'),
-  arithmetic (is, <, >, =<, >=, =:=, =\=), and metalogical tests (var/1, nonvar/1, atom/1, etc.).
+Isolation & Sandboxing Principle:
+- Modules loaded by the host to implement Crowlog (e.g. charsio, files, os)
+  are NOT implicitly exposed to interpreted programs.
+- As much as possible, library modules must be explicitly loaded in Crowlog
+  via consult/1 or [library(...)] and interpreted in the in-memory KB.
+
+Host engine absorbs only a minimal, explicit set of primitives:
+- Core ISO primitives: unification (=, \=, ==, \==), dif/2, true, fail, false,
+  control constructs (',', ';', '->', '*->', '!'), negation (\+), meta-call (call/1..N),
+  arithmetic (is, <, >, =<, >=, =:=, =\=), and metalogical tests
+  (var/1, nonvar/1, atom/1, integer/1, float/1, compound/1, atomic/1,
+   functor/3, arg/3, =../2, atom_chars/2, number_chars/2).
 - Delimited control: reset/3 and shift/1 (via library(cont)).
 - Pure conditionals: native interpretation of reified if_/3.
 */
