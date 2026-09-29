@@ -1,12 +1,11 @@
 # Scryer Prolog Reference Tracking
 
-This document tracks reference files from [mthom/scryer-prolog](https://github.com/mthom/scryer-prolog) used to guide our ISO-compliant lexical analyzer, parser, and canonical term representation.
+This document tracks reference files from [mthom/scryer-prolog](https://codeberg.org/mthom/scryer-prolog) used to guide our ISO-compliant lexical analyzer, parser, and canonical term representation.
 
 ## Baseline Reference
 
-- **Upstream Repository**: `https://github.com/mthom/scryer-prolog`
-- **Tracked Baseline Commit**: `964977a761c7d6381f2cffb891e3dedec35991fa`
-- **Submodule Target (Proposed)**: `reference/scryer-prolog` or `vendor/scryer-prolog`
+- **Upstream Repository**: `https://codeberg.org/mthom/scryer-prolog`
+- **Submodule Target**: `reference/scryer-prolog`
 
 ## Monitored Files
 
