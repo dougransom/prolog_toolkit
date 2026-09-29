@@ -214,68 +214,84 @@ read_stream_chars_chunk([C|Cs], Stream, [C|Rest]) :-
 parse_module_chars(Chars, SourceName, CurrentDir, State0, StateOut, ModuleInfo) :-
     parse_module_chars(Chars, [], SourceName, CurrentDir, State0, StateOut, ModuleInfo).
 
-parse_module_chars(Chars, Options, SourceName, CurrentDir, State0, StateOut, ModuleInfo) :-
+parse_module_chars(Chars, Options, _SourceName, CurrentDir, State0, StateOut, ModuleInfo) :-
     phrase(prolog_tokens(Tokens), Chars),
     State0 = loader_state(_, _, BaseOpTable),
-    parse_module_tokens(Tokens, Options, SourceName, CurrentDir, BaseOpTable, State0, StateOut, [], Statements, unknown, ModName, [], Exports, []),
+    Builder0 = builder(unknown, [], [], [], State0, BaseOpTable),
+    phrase(parse_module_tokens(Options, CurrentDir, Builder0, BuilderOut), Tokens),
+    BuilderOut = builder(ModName, Exports, _LocalOps, Statements, StateOut, _OpTable),
     extract_exported_ops(Exports, ExportedOps),
     ModuleInfo = module_info(ModName, Exports, ExportedOps, Statements).
 
-parse_module_tokens([], _Options, _Source, _Dir, _OpTable, State, State, Stmts, Stmts, Name, Name, Exps, Exps, _Ops).
-parse_module_tokens([Tok|Rest], Options, Source, Dir, OpTable0, State0, StateOut, StmtsAcc, StmtsFinal, Name0, NameFinal, Exps0, ExpsFinal, LocalOps0) :-
-    token_type(Tok, Type),
-    if_(Type = end,
-        if_(Rest = [],
-            ( StateOut = State0, StmtsFinal = StmtsAcc, NameFinal = Name0, ExpsFinal = Exps0 ),
-            ( phrase(parse_clause(OpTable0, Options, Stmt, OpTable1), [Tok|Rest], TokensRest),
-              !,
-              process_parsed_statement(Stmt, StmtsAcc, StmtsAcc1, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
-              parse_module_tokens(TokensRest, Options, Source, Dir, OpTable2, State1, StateOut, StmtsAcc1, StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
-            )
-        ),
-        ( phrase(parse_clause(OpTable0, Options, Stmt, OpTable1), [Tok|Rest], TokensRest),
-          !,
-          process_parsed_statement(Stmt, StmtsAcc, StmtsAcc1, Dir, OpTable1, OpTable2, State0, State1, Name0, Name1, Exps0, Exps1, LocalOps0, LocalOps1),
-          parse_module_tokens(TokensRest, Options, Source, Dir, OpTable2, State1, StateOut, StmtsAcc1, StmtsFinal, Name1, NameFinal, Exps1, ExpsFinal, LocalOps1)
+parse_module_tokens(_Options, _Dir, Builder, Builder) --> [].
+parse_module_tokens(Options, Dir, Builder0, BuilderOut) -->
+    [Tok],
+    { token_type(Tok, Type) },
+    (   { Type = end } ->
+        (   [] ->
+            { BuilderOut = Builder0 }
+        ;   parse_module_statement_stream([Tok], Options, Dir, Builder0, Builder1),
+            parse_module_tokens(Options, Dir, Builder1, BuilderOut)
         )
+    ;   parse_module_statement_stream([Tok], Options, Dir, Builder0, Builder1),
+        parse_module_tokens(Options, Dir, Builder1, BuilderOut)
     ).
 
-process_parsed_statement([], StmtsAcc, StmtsAcc, _Dir, OpTable, OpTable, State, State, N, N, E, E, Ops, Ops) :- !.
-process_parsed_statement([S|Ss], StmtsAcc, StmtsAccOut, Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
+parse_module_statement_stream([Tok], Options, Dir, Builder0, BuilderOut, RestIn, RestOut) :-
+    Builder0 = builder(_, _, _, _, _, OpTable0),
+    phrase(parse_clause(OpTable0, Options, Stmt, OpTable1), [Tok|RestIn], RestOut),
     !,
-    handle_parsed_statements([S|Ss], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut),
+    process_parsed_statement(Stmt, Dir, OpTable1, Builder0, BuilderOut).
+
+process_parsed_statement([], _Dir, OpTable, Builder0, BuilderOut) :-
+    !,
+    Builder0 = builder(N, E, Ops, Stmts, State, _),
+    BuilderOut = builder(N, E, Ops, Stmts, State, OpTable).
+process_parsed_statement([S|Ss], Dir, OpTable, Builder0, BuilderOut) :-
+    !,
+    Builder0 = builder(N0, E0, Ops0, Stmts0, State0, _),
+    Builder1 = builder(N0, E0, Ops0, Stmts0, State0, OpTable),
+    handle_parsed_statements([S|Ss], Dir, Builder1, Builder2),
     reverse([S|Ss], RevStmt),
-    append(RevStmt, StmtsAcc, StmtsAccOut).
-process_parsed_statement(Stmt, StmtsAcc, [Stmt|StmtsAcc], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
-    handle_parsed_statements([Stmt], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut).
+    Builder2 = builder(N2, E2, Ops2, _, State2, OpTable2),
+    append(RevStmt, Stmts0, StmtsOut),
+    BuilderOut = builder(N2, E2, Ops2, StmtsOut, State2, OpTable2).
+process_parsed_statement(Stmt, Dir, OpTable, Builder0, BuilderOut) :-
+    Builder0 = builder(N0, E0, Ops0, Stmts0, State0, _),
+    Builder1 = builder(N0, E0, Ops0, Stmts0, State0, OpTable),
+    handle_parsed_statements([Stmt], Dir, Builder1, Builder2),
+    Builder2 = builder(N2, E2, Ops2, _, State2, OpTable2),
+    BuilderOut = builder(N2, E2, Ops2, [Stmt|Stmts0], State2, OpTable2).
 
-handle_parsed_statements([], _, OpTable, OpTable, State, State, N, N, E, E, Ops, Ops).
-handle_parsed_statements([S|Ss], Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
-    handle_parsed_statement(S, Dir, OpTable0, OpTable1, State0, State1, N0, N1, E0, E1, Ops0, Ops1),
-    handle_parsed_statements(Ss, Dir, OpTable1, OpTableOut, State1, StateOut, N1, NOut, E1, EOut, Ops1, OpsOut).
+handle_parsed_statements([], _, Builder, Builder).
+handle_parsed_statements([S|Ss], Dir, Builder0, BuilderOut) :-
+    handle_parsed_statement(S, Dir, Builder0, Builder1),
+    handle_parsed_statements(Ss, Dir, Builder1, BuilderOut).
 
-handle_parsed_statement(Stmt, Dir, OpTable0, OpTableOut, State0, StateOut, N0, NOut, E0, EOut, Ops0, OpsOut) :-
+handle_parsed_statement(Stmt, Dir, Builder0, BuilderOut) :-
+    Builder0 = builder(N0, E0, Ops0, Stmts, State0, OpTable0),
     if_(Stmt = directive(module(ModName, Exports), _),
-        ( NOut = ModName, EOut = Exports, OpsOut = Ops0, StateOut = State0,
-          import_exported_ops(Exports, OpTable0, OpTableOut)
+        ( import_exported_ops(Exports, OpTable0, OpTable1),
+          BuilderOut = builder(ModName, Exports, Ops0, Stmts, State0, OpTable1)
         ),
         if_(Stmt = directive(use_module(Spec), _),
-            ( NOut = N0, EOut = E0, OpsOut = Ops0,
-              import_module_ops(Spec, Dir, OpTable0, OpTableOut, State0, StateOut)
+            ( import_module_ops(Spec, Dir, OpTable0, OpTable1, State0, State1),
+              BuilderOut = builder(N0, E0, Ops0, Stmts, State1, OpTable1)
             ),
             if_(Stmt = directive(use_module(Spec, Imports), _),
-                ( NOut = N0, EOut = E0, OpsOut = Ops0,
-                  extract_exported_ops(Imports, SpecifiedOps),
+                ( extract_exported_ops(Imports, SpecifiedOps),
                   if_(SpecifiedOps = [],
-                      ( OpTableOut = OpTable0, StateOut = State0 ),
-                      import_module_ops(Spec, Dir, OpTable0, OpTableOut, State0, StateOut)
+                      BuilderOut = Builder0,
+                      ( import_module_ops(Spec, Dir, OpTable0, OpTable1, State0, State1),
+                        BuilderOut = builder(N0, E0, Ops0, Stmts, State1, OpTable1)
+                      )
                   )
                 ),
                 if_(Stmt = directive(op(P, S, O), _),
-                    ( NOut = N0, EOut = E0, OpsOut = [op(P, S, O)|Ops0], StateOut = State0,
-                      add_operator(OpTable0, P, S, O, OpTableOut)
+                    ( add_operator(OpTable0, P, S, O, OpTable1),
+                      BuilderOut = builder(N0, E0, [op(P, S, O)|Ops0], Stmts, State0, OpTable1)
                     ),
-                    ( NOut = N0, EOut = E0, OpsOut = Ops0, StateOut = State0, OpTableOut = OpTable0 )
+                    BuilderOut = Builder0
                 )
             )
         )

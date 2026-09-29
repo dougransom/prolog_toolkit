@@ -23,6 +23,7 @@
 
 :- use_module(library(charsio)).
 :- use_module(library(clpz)).
+:- use_module(library(dcgs)).
 :- use_module(library(lists)).
 :- use_module(library(reif)).
 :- use_module(library(si)).
@@ -51,75 +52,75 @@ prolog_expand_term(Options, RawTerm, ExpandedTerms, StateOut) :-
 %% prolog_expand_term_lineage(+Options, +RawTerm, -ExpandedTerms, -MacrosUsed, +StateIn, -StateOut)
 prolog_expand_term_lineage(Options, RawTerm, ExpandedTerms, MacrosUsed, StateIn, StateOut) :-
     StateIn = expander_state(Mode, Rules0),
-    expand_by_mode_lineage(Mode, Options, RawTerm, Terms1, MacrosUsed, Rules0, Rules1),
+    phrase(expand_by_mode_lineage(Mode, Options, RawTerm, Terms1, Rules0, Rules1), MacrosUsed),
     StateOut = expander_state(Mode, Rules1),
     flatten_terms(Terms1, ExpandedTerms).
 
-expand_by_mode_lineage(none, _Options, Term, [Term], [], Rules, Rules).
-expand_by_mode_lineage(pure_dcg, _Options, Term, Expanded, Macros, Rules, Rules) :-
-    if_(Term = (Head --> Body),
-        ( prolog_dcg_expand_rule((Head --> Body), Clause),
-          Expanded = [Clause],
-          Macros = [macro(dcg, (Head --> Body))]
-        ),
-        ( Expanded = [Term], Macros = [] )
+expand_by_mode_lineage(none, _Options, Term, [Term], Rules, Rules) --> [].
+expand_by_mode_lineage(pure_dcg, _Options, Term, Expanded, Rules, Rules) -->
+    (   { Term = (Head --> Body) } ->
+        { prolog_dcg_expand_rule((Head --> Body), Clause),
+          Expanded = [Clause]
+        },
+        [macro(dcg, (Head --> Body))]
+    ;   { Expanded = [Term] }
     ).
-expand_by_mode_lineage(host, _Options, Term, Expanded, Macros, Rules, Rules) :-
-    catch(expand_term(Term, Res), _, Res = Term),
-    if_(Res = Term,
-        if_(Term = (_Head --> _Body),
-            ( prolog_dcg_expand_rule(Term, Clause),
-              Expanded = [Clause],
-              Macros = [macro(dcg, Term)]
-            ),
-            ( Expanded = [Term], Macros = [] )
-        ),
-        ( wrap_list(Res, Expanded), Macros = [macro(host_term_expansion, expand_term/2)] )
+expand_by_mode_lineage(host, _Options, Term, Expanded, Rules, Rules) -->
+    { catch(expand_term(Term, Res), _, Res = Term) },
+    (   { Res = Term } ->
+        (   { Term = (_Head --> _Body) } ->
+            { prolog_dcg_expand_rule(Term, Clause),
+              Expanded = [Clause]
+            },
+            [macro(dcg, Term)]
+        ;   { Expanded = [Term] }
+        )
+    ;   { wrap_list(Res, Expanded) },
+        [macro(host_term_expansion, expand_term/2)]
     ).
-expand_by_mode_lineage(delegate(Closure), _Options, Term, Expanded, Macros, Rules, Rules) :-
-    catch(call(Closure, Term, Res), _, Res = Term),
-    if_(Res = Term,
-        Macros = [],
-        Macros = [macro(delegate(Closure), Closure)]
+expand_by_mode_lineage(delegate(Closure), _Options, Term, Expanded, Rules, Rules) -->
+    { catch(call(Closure, Term, Res), _, Res = Term) },
+    (   { Res = Term } ->
+        []
+    ;   [macro(delegate(Closure), Closure)]
     ),
-    wrap_list(Res, Expanded).
-expand_by_mode_lineage(rules(LocalRules), _Options, Term, Expanded, Macros, Rules0, RulesOut) :-
-    append(Rules0, LocalRules, AllRules),
-    apply_rules_expansion_lineage(AllRules, Term, Res, Macros, AllRules, RulesOut),
-    wrap_list(Res, Expanded).
-expand_by_mode_lineage(chained([]), _Options, Term, [Term], [], Rules, Rules).
-expand_by_mode_lineage(chained([Mode|Modes]), Options, Term, Expanded, Macros, Rules0, RulesOut) :-
-    expand_by_mode_lineage(Mode, Options, Term, Terms1, Macros1, Rules0, Rules1),
-    expand_chained_list_lineage(Terms1, Modes, Options, Expanded, MacrosRest, Rules1, RulesOut),
-    append(Macros1, MacrosRest, Macros).
+    { wrap_list(Res, Expanded) }.
+expand_by_mode_lineage(rules(LocalRules), _Options, Term, Expanded, Rules0, RulesOut) -->
+    { append(Rules0, LocalRules, AllRules) },
+    apply_rules_expansion_dcg(AllRules, Term, Res, AllRules, RulesOut),
+    { wrap_list(Res, Expanded) }.
+expand_by_mode_lineage(chained([]), _Options, Term, [Term], Rules, Rules) --> [].
+expand_by_mode_lineage(chained([Mode|Modes]), Options, Term, Expanded, Rules0, RulesOut) -->
+    expand_by_mode_lineage(Mode, Options, Term, Terms1, Rules0, Rules1),
+    expand_chained_list_dcg(Terms1, Modes, Options, Expanded, Rules1, RulesOut).
+
+expand_chained_list_dcg([], _Modes, _Options, [], Rules, Rules) --> [].
+expand_chained_list_dcg([T|Ts], Modes, Options, Out, Rules0, RulesOut) -->
+    expand_by_mode_lineage(chained(Modes), Options, T, Exp1, Rules0, Rules1),
+    expand_chained_list_dcg(Ts, Modes, Options, ExpRest, Rules1, RulesOut),
+    { append(Exp1, ExpRest, Out) }.
+
+apply_rules_expansion_dcg([], Term, Term, Rules, Rules) --> [].
+apply_rules_expansion_dcg([Rule|Rest], Term, Out, RulesIn, RulesOut) -->
+    { if_(Rule = rule(Head, Replacement, Meta),
+          ( RuleHead = Head, RuleRepl = Replacement, RuleMeta = Meta ),
+          if_(Rule = rule(Head, Replacement),
+              ( RuleHead = Head, RuleRepl = Replacement, RuleMeta = none ),
+              ( RuleHead = not_a_rule, RuleRepl = not_a_rule, RuleMeta = none )
+          )
+      )
+    },
+    (   { subsumes_term(RuleHead, Term) } ->
+        { copy_term(rule(RuleHead, RuleRepl), rule(Term, Out)),
+          RulesOut = RulesIn
+        },
+        [macro(rule(RuleHead, RuleRepl), RuleMeta)]
+    ;   apply_rules_expansion_dcg(Rest, Term, Out, RulesIn, RulesOut)
+    ).
 
 wrap_list([], []) :- !.
 wrap_list([H|T], [H|T]) :- !.
 wrap_list(Term, [Term]).
-
-expand_chained_list_lineage([], _Modes, _Options, [], [], Rules, Rules).
-expand_chained_list_lineage([T|Ts], Modes, Options, Out, Macros, Rules0, RulesOut) :-
-    expand_by_mode_lineage(chained(Modes), Options, T, Exp1, Mac1, Rules0, Rules1),
-    expand_chained_list_lineage(Ts, Modes, Options, ExpRest, MacRest, Rules1, RulesOut),
-    append(Exp1, ExpRest, Out),
-    append(Mac1, MacRest, Macros).
-
-%% apply_rules_expansion_lineage(+Rules, +TermIn, -TermOut, -Macros, +RulesIn, -RulesOut)
-apply_rules_expansion_lineage([], Term, Term, [], Rules, Rules).
-apply_rules_expansion_lineage([Rule|Rest], Term, Out, Macros, RulesIn, RulesOut) :-
-    if_(Rule = rule(Head, Replacement, Meta),
-        ( RuleHead = Head, RuleRepl = Replacement, RuleMeta = Meta ),
-        if_(Rule = rule(Head, Replacement),
-            ( RuleHead = Head, RuleRepl = Replacement, RuleMeta = none ),
-            ( RuleHead = not_a_rule, RuleRepl = not_a_rule, RuleMeta = none )
-        )
-    ),
-    (   subsumes_term(RuleHead, Term) ->
-        copy_term(rule(RuleHead, RuleRepl), rule(Term, Out)),
-        Macros = [macro(rule(RuleHead, RuleRepl), RuleMeta)],
-        RulesOut = RulesIn
-    ;   apply_rules_expansion_lineage(Rest, Term, Out, Macros, RulesIn, RulesOut)
-    ).
 
 flatten_terms([], []).
 flatten_terms([[]|Ts], Out) :-
