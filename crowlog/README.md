@@ -2,6 +2,13 @@
 
 Crowlog is an interactive toplevel and pure step-level meta-interpreter with source provenance, derivation tree inspection, on-demand backtracking, and decoupled I/O streams.
 
+## Primary Goal: Full Scryer Prolog Program Compatibility
+
+It is an explicit design goal for Crowlog that **it should be able to interpret the same programs as Scryer Prolog**:
+- Any valid ISO / Scryer Prolog source code (including modules, directives, DCGs, reified conditionals, term/goal expansions, and library predicates) should run identically under Crowlog.
+- Standard libraries from Scryer Prolog (such as `library(lists)`, `library(reif)`, `library(pairs)`, `library(assoc)`, `library(si)`, etc.) can be loaded and executed directly by Crowlog via `consult(library(...))` or `[library(...)]`.
+- Query answers, variable binding displays (e.g. `X = [Y]`), and error terms follow ISO and Scryer Prolog standards.
+
 ## Features
 
 - **Standard Prolog Term Representation**: Clean homoiconic answers and ISO-standard error messages.

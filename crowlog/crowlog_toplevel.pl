@@ -350,17 +350,17 @@ answer_display_(VarNames, Derivation, Opts) -->
     show_answer_(IsEmpty, DisplayBindings).
 
 filter_display_bindings(VarNames, DisplayBindings) :-
-    filter_bindings_aux(VarNames, DisplayBindings).
+    filter_bindings_aux(VarNames, VarNames, DisplayBindings).
 
-filter_bindings_aux([], []).
-filter_bindings_aux([Name = Val|Rest], Out) :-
+filter_bindings_aux([], _, []).
+filter_bindings_aux([Name = Val|Rest], VarNames, Out) :-
     name_to_chars(Name, NameChars),
-    write_term_to_chars(Val, [quoted(true)], ValChars),
+    write_term_to_chars(Val, [quoted(true), variable_names(VarNames)], ValChars),
     var_redundant_t(Val, NameChars, ValChars, RedundantT),
     if_(RedundantT = true,
-        filter_bindings_aux(Rest, Out),
+        filter_bindings_aux(Rest, VarNames, Out),
         (   Out = [NameChars = ValChars|Tail],
-            filter_bindings_aux(Rest, Tail)
+            filter_bindings_aux(Rest, VarNames, Tail)
         )).
 
 name_to_chars(Name, Chars) :-

@@ -132,8 +132,7 @@ test_1_aliasing :-
 
 test_1_unbound_var_in_list :-
     assert_toplevel_contains("X = [Y].\nhalt.\n", [
-        "X = [",
-        "Y = "
+        "X = [Y]"
     ]).
 
 %% ============================================================================
