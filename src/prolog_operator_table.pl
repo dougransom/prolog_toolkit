@@ -79,6 +79,22 @@ default_operator_table(op_table(Ops)) :-
         op( 700, xfx, "is"),
         op( 700,  fx, "non_counted_backtracking"),
 
+        % CLP(Z) Constraint Operators (760, 750, 740, 730, 720, 710, 700)
+        op( 760, yfx, "#<==>"),
+        op( 750, xfy, "#==>"),
+        op( 740, yfx, "#<=="),
+        op( 730, yfx, "#\\/"),
+        op( 720, yfx, "#/\\"),
+        op( 710,  fy, "#\\"),
+        op( 700, xfx, "#="),
+        op( 700, xfx, "#\\="),
+        op( 700, xfx, "#<"),
+        op( 700, xfx, "#=<"),
+        op( 700, xfx, "#>"),
+        op( 700, xfx, "#>="),
+        op( 700, xfx, "in"),
+        op( 700, xfx, "ins"),
+
         % Module Qualification (600)
         op( 600, xfy, ":"),
 

@@ -2,7 +2,7 @@
 
 PROLOG ?= nice scryer-safe -f
 
-.PHONY: all test test-core test-crowlog crowlog test-module-loader test-iso-conformity test-all test-scryer-lib update-reference clean help
+.PHONY: all test test-core test-crowlog crowlog test-module-loader test-iso-conformity test-scryer-compat test-all test-scryer-lib update-reference clean help
 
 all: test
 
@@ -14,7 +14,8 @@ help:
 	@echo "  make crowlog              Launch interactive Crowlog toplevel REPL"
 	@echo "  make test-module-loader   Run module loader tests (standalone on-demand/pre-checkin)"
 	@echo "  make test-iso-conformity  Run ISO conformity test suite (from reference/scryer-prolog)"
-	@echo "  make test-all             Run core tests, Crowlog tests, module loader, and ISO tests"
+	@echo "  make test-scryer-compat   Run Scryer Prolog compatibility test suite"
+	@echo "  make test-all             Run core tests, Crowlog tests, module loader, ISO, and Scryer compat tests"
 	@echo "  make test-scryer-lib      Parse all Scryer standard library files in reference/scryer-prolog/src/lib"
 	@echo "  make update-reference     Pull latest Scryer reference submodule"
 
@@ -45,11 +46,16 @@ test-iso-conformity:
 	PROLOG_TIMEOUT=120s PROLOG_MEMORY_MAX=2G $(PROLOG) tests/test_iso_conformity.pl
 	@echo "=== ISO Conformity Tests Passed ==="
 
+test-scryer-compat:
+	@echo "=== Running Scryer Compatibility Test Suite ==="
+	PROLOG_TIMEOUT=120s PROLOG_MEMORY_MAX=2G $(PROLOG) tests/scryer_compatibility/test_scryer_compat.pl
+	@echo "=== Scryer Compatibility Tests Passed ==="
+
 update-reference:
 	@echo "=== Updating Scryer Reference Submodule ==="
 	git submodule update --remote --merge reference/scryer-prolog
 
-test-all: test-core test-crowlog test-module-loader test-iso-conformity
+test-all: test-core test-crowlog test-module-loader test-iso-conformity test-scryer-compat
 
 test-scryer-lib:
 	@echo "=== Testing Parsing Across Scryer Standard Library ==="

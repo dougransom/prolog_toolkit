@@ -487,7 +487,7 @@ crowlog_consult(FileSpec, state(kb(KB0), ops(OpT0), opts(Opts)), state(kb(KB1), 
     resolve_consult_file(FileSpec, PathChars),
     read_file_to_chars(PathChars, Chars),
     phrase(prolog_tokens(Tokens), Chars),
-    phrase(prolog_parse_program(OpT0, Clauses, OpT1), Tokens),
+    phrase(prolog_parse_program(OpT0, [expand_mode(pure_dcg)], Clauses, OpT1), Tokens),
     append(KB0, Clauses, KB1),
     length(Clauses, N),
     phrase(toplevel_consult_msg_(PathChars, N), MsgChars).

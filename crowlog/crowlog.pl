@@ -28,6 +28,8 @@ Host engine absorbs only a minimal, explicit set of primitives:
 */
 
 :- use_module(library(charsio)).
+:- use_module(library(clpz)).
+:- use_module(library(dcgs)).
 :- use_module(library(dif)).
 :- use_module(library(lists)).
 :- use_module(library(reif)).
@@ -72,6 +74,8 @@ crowlog_interpret_shape(if_reif(Cond, Then, Else), KB, proof(if_reif(T, BranchTr
         (   crowlog_interpret(Else, KB, ElseTree),
             BranchTree = else(ElseTree)
         )).
+crowlog_interpret_shape(phrase(GRBody, S0, S), KB, proof(step(phrase(GRBody, S0, S), builtin, SubTree))) :-
+    interpret_call(call(GRBody, S0, S), 3, KB, SubTree).
 crowlog_interpret_shape(call(CallGoal, Arity), KB, proof(step(CallGoal, builtin, SubTree))) :-
     interpret_call(CallGoal, Arity, KB, SubTree).
 crowlog_interpret_shape(negation(Goal), KB, proof(negation(Goal))) :-
@@ -183,7 +187,25 @@ goal_shape_ext(Goal, F, A, Shape) :-
                 arg(3, Goal, E),
                 Shape = if_reif(C, T, E)
             ),
-            goal_shape_call(Goal, F, A, Shape)),
+            goal_shape_phrase(Goal, F, A, Shape)),
+        goal_shape_phrase(Goal, F, A, Shape)).
+
+goal_shape_phrase(Goal, F, A, Shape) :-
+    if_(F = phrase,
+        if_(A = 2,
+            (   arg(1, Goal, GRBody),
+                arg(2, Goal, S0),
+                Shape = phrase(GRBody, S0, [])
+            ),
+            if_(A = 3,
+                (   arg(1, Goal, GRBody),
+                    arg(2, Goal, S0),
+                    arg(3, Goal, S),
+                    Shape = phrase(GRBody, S0, S)
+                ),
+                goal_shape_call(Goal, F, A, Shape)
+            )
+        ),
         goal_shape_call(Goal, F, A, Shape)).
 
 goal_shape_call(Goal, F, A, Shape) :-
@@ -241,7 +263,10 @@ builtins_spec_list([
     b('<', 2), b('>', 2), b('=<', 2), b('>=', 2), b('=:=', 2), b('=\\=', 2),
     b(var, 1), b(nonvar, 1), b(atom, 1), b(integer, 1), b(float, 1), b(compound, 1), b(atomic, 1),
     b(functor, 3), b(arg, 3), b('=..', 2), b(atom_chars, 2), b(number_chars, 2),
-    b(length, 2), b(append, 3), b(member, 2)
+    b(length, 2), b(append, 3), b(member, 2),
+    % CLP(Z) Constraints
+    b('#=', 2), b('#\\=', 2), b('#<', 2), b('#>', 2), b('#=<', 2), b('#>=', 2),
+    b(in, 2), b(ins, 2), b(label, 1), b(labeling, 2)
 ]).
 
 crowlog_call_builtin(Goal) :-
