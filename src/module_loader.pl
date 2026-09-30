@@ -313,14 +313,6 @@ import_module_ops(Spec, CurrentDir, OpTable0, OpTableOut, State0, StateOut) :-
         StateOut = State0
     ).
 
-import_exported_ops([], T, T).
-import_exported_ops([Item|Rest], T0, TOut) :-
-    if_(Item = op(P, S, O),
-        add_operator(T0, P, S, O, T1),
-        T1 = T0
-    ),
-    import_exported_ops(Rest, T1, TOut).
-
 extract_exported_ops([], []).
 extract_exported_ops([Item|Rest], OpsOut) :-
     if_(Item = op(P, S, O),

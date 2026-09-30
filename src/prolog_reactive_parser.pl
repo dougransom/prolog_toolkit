@@ -21,6 +21,7 @@
     reactive_parse_subterm/5,
     reactive_build_rule/4,
     ast_to_raw_term/2,
+    module_exported_ops_t/3,
 
     % Backward-compatibility aliases
     parse_term//6,
@@ -651,17 +652,47 @@ update_optable_if_op_decl(Term, OpTable0, OpTableOut) :-
         add_operator(OpTable0, Prec, Spec, Op, OpTableOut),
         if_(Term = (:- module(_, Exports)),
             import_exported_ops(Exports, OpTable0, OpTableOut),
-            OpTableOut = OpTable0
+            if_(Term = (:- use_module(ModSpec)),
+                import_ops_from_use_module(ModSpec, OpTable0, OpTableOut),
+                OpTableOut = OpTable0
+            )
         )
     ).
 
-import_exported_ops([], T, T).
-import_exported_ops([Item|Rest], T0, TOut) :-
-    if_(Item = op(P, S, O),
-        add_operator(T0, P, S, O, T1),
-        T1 = T0
-    ),
-    import_exported_ops(Rest, T1, TOut).
+import_ops_from_use_module(ModSpec, T0, TOut) :-
+    module_exported_ops_t(ModSpec, ModOps, HasOps),
+    if_(HasOps = true,
+        import_exported_ops(ModOps, T0, TOut),
+        TOut = T0
+    ).
+
+module_exported_ops_t(library(clpz), Ops, true) :-
+    !,
+    clpz_exported_ops(Ops).
+module_exported_ops_t(clpz, Ops, true) :-
+    !,
+    clpz_exported_ops(Ops).
+module_exported_ops_t(_, [], false).
+
+clpz_exported_ops([
+    op(760, yfx, "#<==>"),
+    op(750, xfy, "#==>"),
+    op(750, yfx, "#<=="),
+    op(740, yfx, "#\\/"),
+    op(730, yfx, "#\\"),
+    op(720, yfx, "#/\\"),
+    op(710,  fy, "#\\"),
+    op(700, xfx, "#>"),
+    op(700, xfx, "#<"),
+    op(700, xfx, "#>="),
+    op(700, xfx, "#=<"),
+    op(700, xfx, "#="),
+    op(700, xfx, "#\\="),
+    op(700, xfx, "in"),
+    op(700, xfx, "ins"),
+    op(450, xfx, ".."),
+    op(150,  fx, "#")
+]).
 
 update_optable_from_statements([], T, T).
 update_optable_from_statements([Stmt|Rest], T0, TOut) :-
@@ -673,7 +704,10 @@ update_optable_from_single_statement(Stmt, T0, T1) :-
         add_operator(T0, Prec, Spec, Op, T1),
         if_(Stmt = directive(module(_, Exports), _),
             import_exported_ops(Exports, T0, T1),
-            T1 = T0
+            if_(Stmt = directive(use_module(ModSpec), _),
+                import_ops_from_use_module(ModSpec, T0, T1),
+                T1 = T0
+            )
         )
     ).
 

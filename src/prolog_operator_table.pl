@@ -14,6 +14,7 @@
     prolog_lookup_postfix_op/5,
     prolog_is_operator/4,
     prolog_op_chars/2,
+    prolog_import_exported_ops/3,
 
     % Backward-compatibility aliases
     default_operator_table/1,
@@ -22,7 +23,8 @@
     lookup_prefix_op/5,
     lookup_postfix_op/5,
     is_operator/4,
-    op_chars/2
+    op_chars/2,
+    import_exported_ops/3
 ]).
 
 :- use_module(library(charsio)).
@@ -79,22 +81,6 @@ default_operator_table(op_table(Ops)) :-
         op( 700, xfx, "is"),
         op( 700,  fx, "non_counted_backtracking"),
 
-        % CLP(Z) Constraint Operators (760, 750, 740, 730, 720, 710, 700)
-        op( 760, yfx, "#<==>"),
-        op( 750, xfy, "#==>"),
-        op( 740, yfx, "#<=="),
-        op( 730, yfx, "#\\/"),
-        op( 720, yfx, "#/\\"),
-        op( 710,  fy, "#\\"),
-        op( 700, xfx, "#="),
-        op( 700, xfx, "#\\="),
-        op( 700, xfx, "#<"),
-        op( 700, xfx, "#=<"),
-        op( 700, xfx, "#>"),
-        op( 700, xfx, "#>="),
-        op( 700, xfx, "in"),
-        op( 700, xfx, "ins"),
-
         % Module Qualification (600)
         op( 600, xfy, ":"),
 
@@ -148,6 +134,17 @@ add_operator(op_table(Ops0), Prec, Spec, Op, op_table(OpsOut)) :-
 add_operator(Table0, Prec, Spec, [Op|Ops], TableOut) :- !,
     add_operator(Table0, Prec, Spec, Op, Table1),
     add_operator(Table1, Prec, Spec, Ops, TableOut).
+
+prolog_import_exported_ops([], T, T).
+prolog_import_exported_ops([Item|Rest], T0, TOut) :-
+    if_(Item = op(P, S, O),
+        prolog_add_operator(T0, P, S, O, T1),
+        T1 = T0
+    ),
+    prolog_import_exported_ops(Rest, T1, TOut).
+
+import_exported_ops(Exports, T0, TOut) :-
+    prolog_import_exported_ops(Exports, T0, TOut).
 
 remove_matching_op([], _, _, []).
 remove_matching_op([op(P, S, C)|Rest], Spec, Chars, Out) :-

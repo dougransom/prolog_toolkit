@@ -47,7 +47,8 @@ Commands:
 
 :- use_module('../src/prolog_lexer').
 :- use_module('../src/prolog_operator_table', [
-    prolog_default_operator_table/1
+    prolog_default_operator_table/1,
+    import_exported_ops/3
 ]).
 :- use_module('../src/prolog_reactive_parser').
 :- use_module('crowlog.pl').
@@ -239,8 +240,10 @@ is_toplevel_command_t(Goal, Truth) :-
         if_(Goal = trace, Truth = true,
         if_(Goal = notrace, Truth = true,
         if_(Goal = consult(_), Truth = true,
+        if_(Goal = use_module(_), Truth = true,
+        if_(Goal = use_module(_,_), Truth = true,
         if_(Goal = [_|_], Truth = true,
-        Truth = false)))))))))
+        Truth = false)))))))))))
     ).
 
 dispatch_toplevel_command(help, State, State, OutChars) :-
@@ -265,8 +268,30 @@ dispatch_toplevel_command(notrace, state(KB, Ops, opts(Opts0)), state(KB, Ops, o
     phrase(toplevel_opt_changed_(trace(false)), OutChars).
 dispatch_toplevel_command(consult(File), State0, State1, OutChars) :-
     crowlog_consult(File, State0, State1, OutChars).
+dispatch_toplevel_command(use_module(Spec), State0, State1, OutChars) :-
+    crowlog_use_module(Spec, State0, State1, OutChars).
+dispatch_toplevel_command(use_module(Spec, _Imports), State0, State1, OutChars) :-
+    crowlog_use_module(Spec, State0, State1, OutChars).
 dispatch_toplevel_command([File|Files], State0, State1, OutChars) :-
     consult_files([File|Files], State0, State1, OutChars).
+
+crowlog_use_module(Spec, State0, State1, OutChars) :-
+    State0 = state(kb(KB0), ops(OpT0), opts(Opts)),
+    module_exported_ops_t(Spec, ModOps, HasOps),
+    if_(HasOps = true,
+        import_exported_ops(ModOps, OpT0, OpT1),
+        OpT1 = OpT0
+    ),
+    if_(is_absorbed_host_module_t(Spec),
+        ( State1 = state(kb(KB0), ops(OpT1), opts(Opts)), OutChars = "   true.\n" ),
+        crowlog_consult(Spec, state(kb(KB0), ops(OpT1), opts(Opts)), State1, OutChars)
+    ).
+
+is_absorbed_host_module_t(library(clpz), true) :- !.
+is_absorbed_host_module_t(clpz, true) :- !.
+is_absorbed_host_module_t(library(iso_ext), true) :- !.
+is_absorbed_host_module_t(iso_ext, true) :- !.
+is_absorbed_host_module_t(_, false).
 
 %% crowlog_eval_query_interactive(+InStream, +OutStream, +Goal, +VarNames, +State, -Lookahead)
 %  Interactively executes Goal with deterministic vs choicepoint-aware answer formatting.
