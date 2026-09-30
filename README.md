@@ -41,30 +41,73 @@ A pure, ISO-compliant lexical and syntactic analysis toolkit for the Prolog lang
    - **Derivation Trees**: Construct explicit, visual proof trees / derivation DAGs linking each proof step to exact AST source positions.
    - **Host Engine Primitive Absorption & Environment Isolation**: The host Prolog engine absorbs only core ISO primitives (`=`, control constructs, `dif/2`, arithmetic, metalogical reflection, delimited control `reset`/`shift`, and pure reified `if_/3`). Host-loaded modules are **not** leaked to user code; standard libraries and user modules are parsed and interpreted in Crowlog's internal KB with full derivation trees.
 
+## Test Runner Strategy & Test Suites
+
+The test infrastructure is designed for high reliability, zero host contamination, and dynamic machine-adaptive execution timeouts.
+
+### 1. Dynamic Timed Test Runner & Timeout Adaptation
+
+All test targets in the [`Makefile`](file:///home/doug/code/prolog_toolkit/Makefile) are executed through the build system wrapper [`scripts/timed_test_runner.sh`](file:///home/doug/code/prolog_toolkit/scripts/timed_test_runner.sh):
+
+- **Zero-Contamination Bare Launch**: All Prolog processes are started with `PROLOG ?= nice scryer-safe -f`, ensuring no ambient `~/.scryerrc` or host settings leak into tests.
+- **Prolog-Native Timing Database**: Test durations are recorded into [`.test_timings.pl`](file:///home/doug/code/prolog_toolkit/.test_timings.pl) as valid ISO Prolog facts:
+  ```prolog
+  % Prolog Test Timings Database
+  test_timing(tmin, 0.429, 1790777007).
+  test_timing(test_core, 88.674, 1790777583).
+  test_timing(test_crowlog, 14.884, 1790777598).
+  test_timing(test_crowlog_toplevel, 20.174, 1790777619).
+  test_timing(test_module_loader, 26.167, 1790777645).
+  test_timing(test_iso_conformity, 1.376, 1790777646).
+  test_timing(test_scryer_compat, 8.447, 1790777655).
+  ```
+- **Minimal Probe Baseline (`TMIN`)**: `make test-tmin` measures the minimal process startup and goal execution time (`$PROLOG -g halt`).
+- **Adaptive Timeout Calculation**:
+  - **First Run (Unseen Target)**: `Timeout = TMIN + TBUFFER` (where `TBUFFER` defaults to 90s in [`Makefile`](file:///home/doug/code/prolog_toolkit/Makefile), overridable via environment or command-line: `make test-all TBUFFER=120`).
+  - **Subsequent Runs**: `Timeout = (LastElapsed * 1.20) + 5.0` with a safety floor of `max(Timeout, TMIN + TBUFFER)` to prevent false timeouts caused by load spikes, small test sample sizes (<= 5 tests), or machine variance.
+
+---
+
+### 2. Test Suites & Packages
+
+The test suite is partitioned into targeted, layered verification targets:
+
+| Target | Command | Description & Scope | Test File |
+| :--- | :--- | :--- | :--- |
+| **Core Suite** | `make test-core` | Consolidated unit tests in a single process: native lexer/clause tokenizer, parser, expander, AST isomorphism against Scryer across 6 standard library files, term I/O with rich provenance metadata, and incremental reactive AST patching. | [`tests/run_all_core_tests.pl`](file:///home/doug/code/prolog_toolkit/tests/run_all_core_tests.pl) |
+| **Crowlog Engine** | `make test-crowlog` | Meta-interpreter reduction steps, derivation trees, cut handling, and delimited control (`reset`/`shift`), followed by interactive REPL transcript and answer formatting tests. | [`tests/crowlog/test_crowlog.pl`](file:///home/doug/code/prolog_toolkit/tests/crowlog/test_crowlog.pl), [`tests/crowlog/test_toplevel.pl`](file:///home/doug/code/prolog_toolkit/tests/crowlog/test_toplevel.pl) |
+| **Module Loader** | `make test-module-loader` | Multi-file search path resolution, circular import prevention, module interface metadata extraction, and dynamic operator export propagation. | [`tests/test_module_loader.pl`](file:///home/doug/code/prolog_toolkit/tests/test_module_loader.pl) |
+| **ISO Conformity** | `make test-iso-conformity` | 102 ISO standard conformity test cases imported from Scryer Prolog reference test suite. | [`tests/test_iso_conformity.pl`](file:///home/doug/code/prolog_toolkit/tests/test_iso_conformity.pl) |
+| **Scryer Compatibility** | `make test-scryer-compat` | Validates that Crowlog reproduces identical answers, variable bindings, and operator scoping to Scryer across 4 tiers: (1) toplevel queries & `if_/3`, (2) core builtins & metalogical tests, (3) DCGs, and (4) CLP(Z) linear equations, inequality domains, and dynamic operator scoping before/after `use_module(library(clpz))`. | [`tests/scryer_compatibility/test_scryer_compat.pl`](file:///home/doug/code/prolog_toolkit/tests/scryer_compatibility/test_scryer_compat.pl) |
+| **Full Library Parse** | `make test-scryer-lib` | Recursive parsing validation across all 50+ files in Scryer Prolog standard library (`reference/scryer-prolog/src/lib/`). | [`tests/test_parse_all_scryer_lib.pl`](file:///home/doug/code/prolog_toolkit/tests/test_parse_all_scryer_lib.pl) |
+| **All Test Suites** | `make test-all` | Runs `test-core`, `test-crowlog`, `test-module-loader`, `test-iso-conformity`, and `test-scryer-compat` sequentially with dynamic timing. | [`Makefile`](file:///home/doug/code/prolog_toolkit/Makefile) |
+
+---
+
+### 3. Package Dependencies & Test Frameworks
+
+- **[QUADS (Queries Using Answer Descriptions)](https://github.com/mthom/quads)**: Declared in [`bakage.toml`](file:///home/doug/code/prolog_toolkit/bakage.toml#L8-L11), QUADS enables transcript-driven specification and verification of Prolog toplevel interactions and error terms.
+- **Pure ISO Test Scaffold**: Test assertions use pure reified conditionals (`if_/3`, `dif/2`) and standard ISO term I/O without procedural side-effects.
+
+---
+
 ## Running Tests
 
-Run unit tests with `make` or directly with Scryer Prolog:
-
 ```bash
-# Run core test suite
-make test
+# Run all core, Crowlog, module loader, ISO, and Scryer compatibility tests
+make test-all
 
-# Run Crowlog meta-interpreter tests (fast feedback during Crowlog development)
+# Run individual test suites
+make test-core
 make test-crowlog
+make test-module-loader
+make test-iso-conformity
+make test-scryer-compat
 
-# Run full Scryer standard library parsing test
-make test-scryer-lib
-```
+# Measure baseline minimal probe run time (TMIN)
+make test-tmin
 
-Or invoke individual test suites:
-
-```bash
-scryer-prolog tests/test_prolog_toolkit.pl
-scryer-prolog tests/test_prolog_parser.pl
-scryer-prolog tests/test_prolog_lexer.pl
-scryer-prolog tests/test_prolog_expander.pl
-scryer-prolog tests/test_module_loader.pl
-scryer-prolog tests/test_scryer_lib.pl
-scryer-prolog tests/test_term_io.pl
+# Run with custom buffer (e.g. 120s on slower CI machines)
+make test-all TBUFFER=120
 ```
 
