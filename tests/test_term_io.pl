@@ -3,6 +3,7 @@
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 :- use_module(library(charsio)).
+:- use_module(library(clpz)).
 :- use_module(library(format)).
 :- use_module(library(lists)).
 :- use_module(library(reif)).
@@ -38,7 +39,7 @@ test_read_term_ex_tokens_provenance :-
     ]),
     Term = bar(_, 42),
     length(TVars, NumVars),
-    NumVars > 0,
+    NumVars #> 0,
     % Verify every token attributed variable carries token provenance
     maplist(verify_token_attr_var(file("my_script.pl")), TVars),
     % Verify tokens list structure

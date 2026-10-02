@@ -12,18 +12,22 @@
     exit_test_process/0
 ]).
 
+:- use_module(library(clpz)).
 :- use_module(library(format)).
-:- use_module(library(si)).
-:- use_module(library(lists)).
 :- use_module(library(iso_ext)).
+:- use_module(library(lists)).
+:- use_module(library(si)).
 
 :- dynamic(test_case/2).
+:- dynamic(is_consolidated/0).
 
 set_consolidated_runner :-
-    bb_put(is_consolidated_runner, true).
+    (   is_consolidated -> true
+    ;   assertz(is_consolidated)
+    ).
 
 is_consolidated_runner :-
-    bb_get(is_consolidated_runner, true).
+    is_consolidated.
 
 exit_test_process :-
     (   is_consolidated_runner ->
@@ -46,7 +50,7 @@ run_tests :-
     retractall(test_case(_, _)),
     run_test_list(Tests, 0, 0, Passed, Failed),
     format("=== Test Summary: ~d passed, ~d failed ===~n", [Passed, Failed]),
-    (   Failed > 0 ->
+    (   Failed #> 0 ->
         halt(1)
     ;   exit_test_process
     ).
@@ -58,7 +62,7 @@ run_test_suite(SuiteName, Module, Tests) :-
     format("=== Running ~s Tests ===~n", [SuiteName]),
     run_test_list(Tests, Module, 0, 0, Passed, Failed),
     format("=== ~s Summary: ~d passed, ~d failed ===~n", [SuiteName, Passed, Failed]),
-    (   Failed > 0 ->
+    (   Failed #> 0 ->
         halt(1)
     ;   exit_test_process
     ).
@@ -75,11 +79,11 @@ run_test_list([], _Mod, P, F, P, F).
 run_test_list([t(Name, Goal)|Rest], Mod, P0, F0, P, F) :-
     (   catch(call(Mod:Goal), Error, (format("FAIL (~s): exception: ~w~n", [Name, Error]), fail)) ->
         format("OK: ~s~n", [Name]),
-        P1 is P0 + 1,
+        P1 #= P0 + 1,
         F1 = F0
     ;   format("FAIL: ~s~n", [Name]),
         P1 = P0,
-        F1 is F0 + 1
+        F1 #= F0 + 1
     ),
     run_test_list(Rest, Mod, P1, F1, P, F).
 

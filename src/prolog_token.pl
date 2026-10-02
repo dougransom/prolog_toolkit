@@ -15,6 +15,7 @@
 ]).
 
 :- use_module(library(lists)).
+:- use_module(library(si)).
 
 /** <module> Token Specification & Accessors
 
@@ -126,7 +127,7 @@ token_value(comment(_, Content), Content).
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 append_token_span(Atom, Span, Lifted) :-
-    atom(Atom),
+    atom_si(Atom),
     Lifted =.. [Atom, Span].
 append_token_span(Term, Span, Lifted) :-
     compound(Term),
@@ -134,14 +135,16 @@ append_token_span(Term, Span, Lifted) :-
     append(Args, [Span], NewArgs),
     Lifted =.. [Functor|NewArgs].
 
-generate_token_lift_and_span([], [], []).
-generate_token_lift_and_span([T|Ts], [lift_token(T, Span, Lifted)|Lifts], [token_span(Lifted, Span)|Spans]) :-
-    append_token_span(T, Span, Lifted),
-    generate_token_lift_and_span(Ts, Lifts, Spans).
+shape_to_lift_clause(T, lift_token(T, Span, Lifted)) :-
+    append_token_span(T, Span, Lifted).
+
+shape_to_span_clause(T, token_span(Lifted, Span)) :-
+    append_token_span(T, Span, Lifted).
 
 % Batch macro: generates contiguous lift_token/3 and token_span/2 definitions
 term_expansion(define_token_shapes(Shapes), AllClauses) :-
-    generate_token_lift_and_span(Shapes, LiftClauses, SpanClauses),
+    maplist(shape_to_lift_clause, Shapes, LiftClauses),
+    maplist(shape_to_span_clause, Shapes, SpanClauses),
     append(LiftClauses, SpanClauses, AllClauses).
 
 % Individual macro rules (e.g. lift_token_m, token_span_m)

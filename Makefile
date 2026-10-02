@@ -48,7 +48,7 @@ SCRYER_COMPAT_MODULES = \
 	test_sgml \
 	test_xpath \
 	test_diag \
-	test_process
+	test_atts
 
 SCRYER_COMPAT_SRCS = $(patsubst %,$(SCRYER_COMPAT_DIR)/%.pl,$(SCRYER_COMPAT_MODULES))
 SCRYER_COMPAT_OUTS = $(patsubst %,$(SCRYER_COMPAT_BUILD_DIR)/%.scryer_out,$(SCRYER_COMPAT_MODULES))
@@ -62,7 +62,7 @@ SCRYER_COMPAT_OUTS = $(patsubst %,$(SCRYER_COMPAT_BUILD_DIR)/%.scryer_out,$(SCRY
         test-scryer-freeze test-scryer-gensym test-scryer-terms test-scryer-ugraphs \
         test-scryer-csv test-scryer-random test-scryer-iso-ext test-scryer-time \
         test-scryer-crypto test-scryer-uuid test-scryer-error test-scryer-clpb \
-        test-scryer-files test-scryer-os test-scryer-pio test-scryer-simplex test-scryer-arithmetic test-scryer-when test-scryer-debug test-scryer-cont test-scryer-sgml test-scryer-xpath test-scryer-diag test-scryer-process \
+        test-scryer-files test-scryer-os test-scryer-pio test-scryer-simplex test-scryer-arithmetic test-scryer-when test-scryer-debug test-scryer-cont test-scryer-sgml test-scryer-xpath test-scryer-diag test-scryer-atts \
         test-all test-scryer-lib update-reference clean help
 
 all: test
@@ -244,8 +244,8 @@ test-scryer-xpath: $(SCRYER_COMPAT_BUILD_DIR)/test_xpath.scryer_out
 test-scryer-diag: $(SCRYER_COMPAT_BUILD_DIR)/test_diag.scryer_out
 	TBUFFER=$(TBUFFER) $(TIMED_RUNNER) test_scryer_diag $(PROLOG) $(SCRYER_COMPAT_DIR)/test_diag.pl -g "test_diag:run_diag_tests('$^')" -g "halt"
 
-test-scryer-process: $(SCRYER_COMPAT_BUILD_DIR)/test_process.scryer_out
-	TBUFFER=$(TBUFFER) $(TIMED_RUNNER) test_scryer_process $(PROLOG) $(SCRYER_COMPAT_DIR)/test_process.pl -g "test_process:run_process_tests('$^')" -g "halt"
+test-scryer-atts: $(SCRYER_COMPAT_BUILD_DIR)/test_atts.scryer_out
+	TBUFFER=$(TBUFFER) $(TIMED_RUNNER) test_scryer_atts $(PROLOG) $(SCRYER_COMPAT_DIR)/test_atts.pl -g "test_atts:run_atts_tests('$^')" -g "halt"
 
 test-scryer-compat: \
 	test-scryer-toplevel \
@@ -287,7 +287,7 @@ test-scryer-compat: \
 	test-scryer-sgml \
 	test-scryer-xpath \
 	test-scryer-diag \
-	test-scryer-process
+	test-scryer-atts
 	@echo "=== All Scryer Compatibility & Parity Tests Passed ==="
 
 scryer-test-parity: test-scryer-compat

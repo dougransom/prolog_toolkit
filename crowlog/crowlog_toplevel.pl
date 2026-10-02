@@ -290,31 +290,23 @@ crowlog_use_module(Spec, State0, State1, OutChars) :-
         crowlog_consult(Spec, state(kb(KB0), ops(OpT1), opts(Opts)), State1, OutChars)
     ).
 
-is_absorbed_host_module_t(library(clpz), true) :- !.
-is_absorbed_host_module_t(clpz, true) :- !.
-is_absorbed_host_module_t(library(iso_ext), true) :- !.
-is_absorbed_host_module_t(iso_ext, true) :- !.
-is_absorbed_host_module_t(library(loader), true) :- !.
-is_absorbed_host_module_t(loader, true) :- !.
-is_absorbed_host_module_t(library(atts), true) :- !.
-is_absorbed_host_module_t(atts, true) :- !.
-is_absorbed_host_module_t(library(dcgs), true) :- !.
-is_absorbed_host_module_t(dcgs, true) :- !.
-is_absorbed_host_module_t(library(format), true) :- !.
-is_absorbed_host_module_t(format, true) :- !.
-is_absorbed_host_module_t(library(si), true) :- !.
-is_absorbed_host_module_t(si, true) :- !.
-is_absorbed_host_module_t(library(between), true) :- !.
-is_absorbed_host_module_t(between, true) :- !.
-is_absorbed_host_module_t(library(charsio), true) :- !.
-is_absorbed_host_module_t(charsio, true) :- !.
-is_absorbed_host_module_t(library(dif), true) :- !.
-is_absorbed_host_module_t(dif, true) :- !.
-is_absorbed_host_module_t(library(error), true) :- !.
-is_absorbed_host_module_t(error, true) :- !.
-is_absorbed_host_module_t(library(reif), true) :- !.
-is_absorbed_host_module_t(reif, true) :- !.
-is_absorbed_host_module_t(_, false).
+is_absorbed_host_module_t(Mod, Truth) :-
+    absorbed_host_modules(Modules),
+    if_(memberd_t(Mod, Modules),
+        Truth = true,
+        if_(Mod = library(Bare),
+            memberd_t(Bare, Modules, Truth),
+            Truth = false
+        )
+    ).
+
+absorbed_host_modules([
+    arithmetic, assoc, atts, between, charsio, clpb, clpz, cont,
+    crypto, csv, dcgs, debug, diag, dif, error, files,
+    format, freeze, gensym, iso_ext, lambda, lists, loader, ordsets,
+    os, pairs, pio, process, queues, random, reif, sgml,
+    simplex, si, terms, time, ugraphs, uuid, when, xpath
+]).
 
 %% crowlog_eval_query_interactive(+InStream, +OutStream, +Goal, +VarNames, +State, -Lookahead)
 %  Interactively executes Goal with deterministic vs choicepoint-aware answer formatting.
@@ -393,7 +385,7 @@ get_non_layout_char(InStream, C) :-
 answer_display_(VarNames, Derivation, Opts) -->
     { memberd_t(tree(true), Opts, ShowTree),
       filter_display_bindings(VarNames, DisplayBindings),
-      if_(DisplayBindings = [], IsEmpty = true, IsEmpty = false) },
+      =(DisplayBindings, [], IsEmpty) },
     show_tree_(ShowTree, Derivation),
     show_answer_(IsEmpty, DisplayBindings).
 
@@ -943,8 +935,4 @@ skip_layout_ --> "\r", !, skip_layout_.
 skip_layout_ --> [].
 
 layout_char_t(C, T) :-
-    if_(C = ' ', T = true,
-    if_(C = '\t', T = true,
-    if_(C = '\n', T = true,
-    if_(C = '\r', T = true,
-    T = false)))).
+    memberd_t(C, [' ', '\t', '\n', '\r'], T).

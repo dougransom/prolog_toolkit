@@ -9,7 +9,9 @@ operating system streams (stdin, stdout, pipes, EOF, exit status codes).
 */
 
 :- use_module(library(charsio)).
+:- use_module(library(clpz)).
 :- use_module(library(dcgs)).
+:- use_module(library(dif)).
 :- use_module(library(format)).
 :- use_module(library(lists)).
 :- use_module(library(process)).
@@ -40,7 +42,7 @@ exec_crowlog(Args, InputChars, OutputChars, ExitCode) :-
     close(OutStream),
     read_stream_chars(ErrStream, ErrChars),
     close(ErrStream),
-    (   ErrChars \= [] ->
+    (   dif(ErrChars, []) ->
         format("Stderr: ~s~n", [ErrChars])
     ;   true
     ),
@@ -80,7 +82,7 @@ run_test(Name, Goal) :-
 
 test_interactive_query :-
     exec_crowlog([], "A is 1 + 2.\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "=== Crowlog: Source-Provenance Prolog REPL ===",
         "A = 3",
@@ -89,7 +91,7 @@ test_interactive_query :-
 
 test_eof_termination :-
     exec_crowlog([], "true = true.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "crowlog ?- ",
         "true",
@@ -98,16 +100,15 @@ test_eof_termination :-
 
 test_unbound_var_in_list :-
     exec_crowlog([], "X = [Y].\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
-        "X = [",
-        "Y = ",
+        "X = [Y]",
         "Exiting Crowlog."
     ]).
 
 test_backtracking_pipe :-
     exec_crowlog([], "member(X, [first, second, third]).\n;\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "X = first",
         "X = second"
@@ -115,7 +116,7 @@ test_backtracking_pipe :-
 
 test_consult_cli_arg :-
     exec_crowlog(["tests/fixtures/sample_kb.pl"], "parent(pam, Who).\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "% Consulted tests/fixtures/sample_kb.pl",
         "Who = bob"
@@ -123,7 +124,7 @@ test_consult_cli_arg :-
 
 test_runtime_error_resilience :-
     exec_crowlog([], "1 is X.\ntrue.\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "instantiation_error",
         "true",
@@ -132,7 +133,7 @@ test_runtime_error_resilience :-
 
 test_incomplete_dot_term_exit :-
     exec_crowlog([], "A=.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "=== Crowlog: Source-Provenance Prolog REPL ===",
         "error(syntax_error(cannot_parse_term)",
@@ -141,7 +142,7 @@ test_incomplete_dot_term_exit :-
 
 test_syntax_error_recovery_stdio :-
     exec_crowlog([], "A=:\n.\nA = 42.\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "error(syntax_error(cannot_parse_term)",
         "A = 42",
@@ -150,7 +151,7 @@ test_syntax_error_recovery_stdio :-
 
 test_unbound_variable_query_stdio :-
     exec_crowlog([], "X.\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "instantiation_error",
         "Exiting Crowlog."
@@ -158,7 +159,7 @@ test_unbound_variable_query_stdio :-
 
 test_multiline_query_stdio :-
     exec_crowlog([], "append([1],\n  [2],\n  Res\n).\nhalt.\n", Output, Code),
-    Code =:= 0,
+    Code #= 0,
     chars_contains_all(Output, [
         "Res = [1,2]",
         "Exiting Crowlog."

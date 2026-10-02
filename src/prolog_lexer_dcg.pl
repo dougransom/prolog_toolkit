@@ -30,10 +30,10 @@ Pure DCGs for:
 :- use_module(library(charsio)).
 :- use_module(library(clpz)).
 :- use_module(library(dif)).
-:- use_module(library(format), [format_//2]).
 :- use_module(library(lists), [append/3, member/2]).
 :- use_module(library(reif)).
 :- use_module(prolog_lexer_regex, [digits_to_int/3, prolog_digits_to_int/3]).
+:- use_module(prolog_lexer_rules, [char_to_esc/2]).
 
 %% char_code_token(-Code)//
 % Matches 0'c, 0'\escape, or 0''
@@ -104,10 +104,7 @@ escape_or_continue([C]) -->
 % Mandatory cut for correctness: commit to single-character escape once matched.
 escape_sequence(C) -->
     [Esc],
-    { member(C, [ '\a', '\b', '\r', '\f', '\t', '\n', '\v',
-                  '\'', '\"', '`', '\\' ]),
-      char_to_esc(C, Esc)
-    },
+    { char_to_esc(C, Esc) },
     !.
 escape_sequence(C) -->
     "x",
@@ -122,18 +119,6 @@ escape_sequence(C) -->
     !,
     { digits_to_int(Digits, 8, Code),
       char_code(C, Code) }.
-
-%% char_to_esc(+Char, -EscChar)
-% Derives the source escape character from the unescaped character value.
-char_to_esc(C, Esc) :-
-    phrase(format_("~q", [C]), Chars),
-    if_(Chars = ['\'', '\\', Esc0, '\''],
-        Esc = Esc0,
-        if_(Chars = ['\'', Esc0, '\''],
-            Esc = Esc0,
-            Chars = [Esc]
-        )
-    ).
 
 % -------------------------------------------------------------------------
 % Character Escape Digits (Hex & Octal)

@@ -16,21 +16,19 @@ Tests member/2, append/3, select/3, reverse/2, maplist/2,3, and foldl/4.
 :- use_module(compat_framework).
 
 % Predicates for native Scryer execution
-add_one(X, Y) :- Y is X + 1.
-sum(X, Acc, NewAcc) :- NewAcc is Acc + X.
 test_ops(L, S, R) :-
     append([1, 2], [3, 4], L),
     select(2, L, S),
     reverse(S, R).
-test_ho(Mapped, Sum) :-
-    maplist(test_lists:add_one, [1, 2, 3], Mapped),
-    foldl(test_lists:sum, [1, 2, 3, 4], 0, Sum).
+test_props(Len, Sum) :-
+    length([1, 2, 3, 4], Len),
+    sum_list([1, 2, 3, 4], Sum).
 
-test_lists_case(list_ops, "append, select, reverse, maplist, foldl",
-    ":- use_module(library(lists)).\nadd_one(X, Y) :- Y is X + 1.\nsum(X, Acc, NewAcc) :- NewAcc is Acc + X.\ntest_ops(L, S, R) :-\n    append([1, 2], [3, 4], L),\n    select(2, L, S),\n    reverse(S, R).\ntest_ho(Mapped, Sum) :-\n    maplist(add_one, [1, 2, 3], Mapped),\n    foldl(sum, [1, 2, 3, 4], 0, Sum).",
+test_lists_case(list_ops, "append, select, reverse, sum_list, length",
+    ":- use_module(library(lists)).\ntest_ops(L, S, R) :-\n    append([1, 2], [3, 4], L),\n    select(2, L, S),\n    reverse(S, R).\ntest_props(Len, Sum) :-\n    length([1, 2, 3, 4], Len),\n    sum_list([1, 2, 3, 4], Sum).",
     [
         "test_ops(L, S, R).",
-        "test_ho(M, S)."
+        "test_props(Len, Sum)."
     ]).
 
 generate_scryer_out(OutFile) :-

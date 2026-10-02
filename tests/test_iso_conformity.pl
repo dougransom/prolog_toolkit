@@ -46,12 +46,20 @@ prefix_chars([C|Cs], [C|Rest]) :-
 
 run_all_tests([], Passed, Passed, Failed, Failed, []).
 run_all_tests([Test|Rest], PassAcc, PassFinal, FailAcc, FailFinal, FailedOut) :-
+    if_(test_succeeds_t(Test),
+        ( PassAcc1 #= PassAcc + 1,
+          run_all_tests(Rest, PassAcc1, PassFinal, FailAcc, FailFinal, FailedOut)
+        ),
+        ( FailAcc1 #= FailAcc + 1,
+          FailedOut = [Test|FailedRest],
+          run_all_tests(Rest, PassAcc, PassFinal, FailAcc1, FailFinal, FailedRest)
+        )
+    ).
+
+test_succeeds_t(Test, Truth) :-
     (   catch(iso_conformity_tests:Test, _Error, fail) ->
-        PassAcc1 #= PassAcc + 1,
-        run_all_tests(Rest, PassAcc1, PassFinal, FailAcc, FailFinal, FailedOut)
-    ;   FailAcc1 #= FailAcc + 1,
-        FailedOut = [Test|FailedRest],
-        run_all_tests(Rest, PassAcc, PassFinal, FailAcc1, FailFinal, FailedRest)
+        Truth = true
+    ;   Truth = false
     ).
 
 :- initialization(run).

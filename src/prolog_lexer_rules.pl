@@ -11,24 +11,19 @@
 ]).
 
 :- use_module(library(charsio)).
+:- use_module(library(clpz)).
+:- use_module(library(lists), [maplist/3]).
 :- use_module(library(reif)).
+
+expand_escape_clause(Esc, char_to_esc(C, Esc)) :-
+    read_from_chars(['"', '\\', Esc, '"', '.'], [C]).
 
 %% char_to_esc(?Char, ?EscChar)
 % Maps unescaped characters to their single-character escape codes.
-user:term_expansion(char_to_esc(Esc), char_to_esc(C, Esc)) :-
-    read_from_chars(['"', '\\', Esc, '"', '.'], [C]).
+term_expansion(escape_chars(EscList), Clauses) :-
+    maplist(expand_escape_clause, EscList, Clauses).
 
-char_to_esc('a').
-char_to_esc('b').
-char_to_esc('r').
-char_to_esc('f').
-char_to_esc('t').
-char_to_esc('n').
-char_to_esc('v').
-char_to_esc('\'').
-char_to_esc('\"').
-char_to_esc('`').
-char_to_esc('\\').
+escape_chars(['a', 'b', 'r', 'f', 't', 'n', 'v', '\'', '\"', '`', '\\']).
 
 %% is_graphic_char(?Char)
 % True if Char is an ISO Prolog graphic character.

@@ -29,6 +29,7 @@ Host engine absorbs only a minimal, explicit set of primitives:
 
 :- use_module(library(arithmetic)).
 :- use_module(library(assoc)).
+:- use_module(library(atts)).
 :- use_module(library(between)).
 :- use_module(library(charsio)).
 :- use_module(library(clpb)).
@@ -152,6 +153,16 @@ crowlog_interpret_clauses([Clause|RestClauses], Goal, KB, Derivation) :-
             Derivation = proof(step(Goal, Span, BodyTree))
         )
     ;   crowlog_interpret_clauses(RestClauses, Goal, KB, Derivation)
+    ).
+crowlog_interpret_clauses([], Goal, KB, Derivation) :-
+    crowlog_lib_clause(Goal, Body),
+    (   split_at_cut(Body, Before, After) ->
+        crowlog_interpret(Before, KB, BeforeTree),
+        !,
+        crowlog_interpret(After, KB, AfterTree),
+        Derivation = proof(step(Goal, default, proof(conjunction(BeforeTree, proof(conjunction(proof(cut), AfterTree))))))
+    ;   crowlog_interpret(Body, KB, BodyTree),
+        Derivation = proof(step(Goal, default, BodyTree))
     ).
 
 split_at_cut_t(Goal, Before, After, Truth) :-
@@ -277,7 +288,7 @@ goal_shape_other(Goal, F, A, Shape) :-
 is_arrow_t(Term, T) :-
     functor(Term, F, A),
     if_(F = (->),
-        if_(A = 2, T = true, T = false),
+        =(A, 2, T),
         T = false).
 
 goal_shape_control(Goal, F, A, Shape) :-
@@ -442,9 +453,9 @@ builtins_spec_list([
     b(foldl, 4), b(foldl, 5), b(foldl, 6), b(foldl, 7), b(foldl, 8),
     b(include, 3), b(exclude, 3), b(partition, 4), b(partition, 5), b(convlist, 3),
     % Lambda expressions (library(lambda))
-    b('^', 3), b('^', 4), b('^', 5), b('^', 6),
-    b('\\', 1), b('\\', 2), b('\\', 3), b('\\', 4),
-    b('+\\', 2), b('+\\', 3), b('+\\', 4), b('+\\', 5),
+    b('^', 3), b('^', 4), b('^', 5), b('^', 6), b('^', 7), b('^', 8), b('^', 9), b('^', 10),
+    b('\\', 1), b('\\', 2), b('\\', 3), b('\\', 4), b('\\', 5), b('\\', 6), b('\\', 7), b('\\', 8),
+    b('+\\', 2), b('+\\', 3), b('+\\', 4), b('+\\', 5), b('+\\', 6), b('+\\', 7), b('+\\', 8), b('+\\', 9),
     % Reification and indexing dif (library(reif))
     b('=', 3), b(',', 3), b(';', 3), b(cond_t, 3), b(dif, 3),
     b(memberd_t, 3), b(tfilter, 3), b(tmember, 2), b(tmember_t, 3), b(tpartition, 4),
@@ -510,9 +521,8 @@ builtins_spec_list([
     b(xpath, 3), b(xpath_chk, 3),
     % WAM Diagnostics (library(diag))
     b(wam_instructions, 2), b(inlined_instructions, 2),
-    % External Process Management (library(process))
-    b(process_create, 3), b(process_id, 2), b(process_release, 1),
-    b(process_wait, 2), b(process_wait, 3), b(process_kill, 1),
+    % Attributed Variables (library(atts))
+    b(term_attributed_variables, 2),
     % CLP(Z) Constraints
     b('#=', 2), b('#\\=', 2), b('#<', 2), b('#>', 2), b('#=<', 2), b('#>=', 2),
     b(in, 2), b(ins, 2), b(label, 1), b(labeling, 2)
@@ -522,28 +532,16 @@ wrap_lambda_modules(Term, Wrapped) :-
     (   var(Term) ->
         Wrapped = Term
     ;   compound(Term) ->
-        functor(Term, F, Arity),
+        Term =.. [F|Args],
+        map_lambda_args(Args, WrappedArgs),
+        WrappedTerm =.. [F|WrappedArgs],
         atom_chars(F, FChars),
-        (   FChars = ['\\'], Arity =:= 1 ->
-            arg(1, Term, Sub),
-            wrap_lambda_modules(Sub, WSub),
-            LambdaHead =.. [F, WSub],
-            Wrapped = lambda:LambdaHead
-        ;   FChars = ['+', '\\'], Arity =:= 2 ->
-            arg(1, Term, GV),
-            arg(2, Term, Sub),
-            wrap_lambda_modules(Sub, WSub),
-            LambdaHead =.. [F, GV, WSub],
-            Wrapped = lambda:LambdaHead
-        ;   FChars = ['^'], Arity =:= 2 ->
-            arg(1, Term, V),
-            arg(2, Term, Sub),
-            wrap_lambda_modules(Sub, WSub),
-            LambdaHead =.. [F, V, WSub],
-            Wrapped = lambda:LambdaHead
-        ;   Term =.. [F|Args],
-            map_lambda_args(Args, WrappedArgs),
-            Wrapped =.. [F|WrappedArgs]
+        (   (   FChars = ['\\']
+            ;   FChars = ['+', '\\']
+            ;   FChars = ['^']
+            ) ->
+            Wrapped = lambda:WrappedTerm
+        ;   Wrapped = WrappedTerm
         )
     ;   Wrapped = Term
     ).
@@ -645,7 +643,7 @@ match_clause(clause(ClauseTerm, Meta), Head, Body, Span) :-
 is_rule_t(Term, T) :-
     functor(Term, F, A),
     if_(F = (:-),
-        if_(A = 2, T = true, T = false),
+        =(A, 2, T),
         T = false).
 
 extract_meta_span(Meta, Span) :-
@@ -659,7 +657,7 @@ extract_meta_span(Meta, Span) :-
 is_meta_t(Term, T) :-
     functor(Term, F, A),
     if_(F = meta,
-        if_(A = 1, T = true, T = false),
+        =(A, 1, T),
         T = false).
 
 meta_span([], no_span).
@@ -672,5 +670,5 @@ meta_span([Item|Rest], Span) :-
 is_span_item_t(Term, T) :-
     functor(Term, F, A),
     if_(F = span,
-        if_(A = 1, T = true, T = false),
+        =(A, 1, T),
         T = false).

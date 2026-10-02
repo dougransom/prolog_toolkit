@@ -48,8 +48,49 @@ generate_cases_to_stream([], _, _, _).
 generate_cases_to_stream([ID|Rest], Module, TestCasePred, Stream) :-
     call(Module:TestCasePred, ID, _Desc, _KB, Queries),
     eval_queries_in_scryer(Queries, Module, OutputLines),
-    format(Stream, "scryer_compat_out(~w, ~q).~n", [ID, OutputLines]),
+    format(Stream, "scryer_compat_out(~w, ", [ID]),
+    write_string_list_term(Stream, OutputLines),
+    format(Stream, ").~n", []),
     generate_cases_to_stream(Rest, Module, TestCasePred, Stream).
+
+write_string_list_term(Stream, Lines) :-
+    put_char(Stream, '['),
+    write_string_list_items(Lines, Stream),
+    put_char(Stream, ']').
+
+write_string_list_items([], _).
+write_string_list_items([L|Ls], Stream) :-
+    write_escaped_string(Stream, L),
+    (   Ls == [] -> true
+    ;   format(Stream, ", ", []),
+        write_string_list_items(Ls, Stream)
+    ).
+
+write_escaped_string(Stream, Chars) :-
+    char_code(Quote, 34),
+    put_char(Stream, Quote),
+    write_escaped_chars(Chars, Stream),
+    put_char(Stream, Quote).
+
+write_escaped_chars([], _).
+write_escaped_chars([C|Cs], Stream) :-
+    char_code(C, Code),
+    char_code(BS, 92),
+    char_code(Quote, 34),
+    if_(Code = 34,
+        ( put_char(Stream, BS), put_char(Stream, Quote) ),
+        if_(Code = 92,
+            ( put_char(Stream, BS), put_char(Stream, BS) ),
+            if_(Code = 10,
+                ( put_char(Stream, BS), put_char(Stream, 'n') ),
+                if_(Code = 9,
+                    ( put_char(Stream, BS), put_char(Stream, 't') ),
+                    put_char(Stream, C)
+                )
+            )
+        )
+    ),
+    write_escaped_chars(Cs, Stream).
 
 eval_queries_in_scryer([], _, []).
 eval_queries_in_scryer([Q|Qs], Module, AllLines) :-

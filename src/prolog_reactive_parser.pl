@@ -667,14 +667,32 @@ import_ops_from_use_module(ModSpec, T0, TOut) :-
     ).
 
 module_exported_ops_t(library(clpz), Ops, true) :-
-    !,
     clpz_exported_ops(Ops).
 module_exported_ops_t(clpz, Ops, true) :-
-    !,
     clpz_exported_ops(Ops).
-module_exported_ops_t(library(atts), [op(1199, fx, "attribute")], true) :- !.
-module_exported_ops_t(atts, [op(1199, fx, "attribute")], true) :- !.
-module_exported_ops_t(_, [], false).
+module_exported_ops_t(library(atts), [op(1199, fx, "attribute")], true).
+module_exported_ops_t(atts, [op(1199, fx, "attribute")], true).
+module_exported_ops_t(library(lambda), [op(201, xfx, "+\\")], true).
+module_exported_ops_t(lambda, [op(201, xfx, "+\\")], true).
+module_exported_ops_t(library(xpath), [op(400, yfx, "//"), op(400, fx, "//"), op(400, fx, "/"), op(200, fy, "@")], true).
+module_exported_ops_t(xpath, [op(400, yfx, "//"), op(400, fx, "//"), op(400, fx, "/"), op(200, fy, "@")], true).
+module_exported_ops_t(library(clpb), [op(300, fy, "~"), op(500, yfx, "#"), op(150, fx, "#")], true).
+module_exported_ops_t(clpb, [op(300, fy, "~"), op(500, yfx, "#"), op(150, fx, "#")], true).
+module_exported_ops_t(library(debug), [op(900, fx, "*")], true).
+module_exported_ops_t(debug, [op(900, fx, "*")], true).
+module_exported_ops_t(Other, [], false) :-
+    dif(Other, library(clpz)),
+    dif(Other, clpz),
+    dif(Other, library(clpb)),
+    dif(Other, clpb),
+    dif(Other, library(atts)),
+    dif(Other, atts),
+    dif(Other, library(lambda)),
+    dif(Other, lambda),
+    dif(Other, library(xpath)),
+    dif(Other, xpath),
+    dif(Other, library(debug)),
+    dif(Other, debug).
 
 clpz_exported_ops([
     op(760, yfx, "#<==>"),

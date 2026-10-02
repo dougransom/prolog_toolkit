@@ -7,6 +7,7 @@
 :- use_module(library(files)).
 :- use_module(library(format)).
 :- use_module(library(lists)).
+:- use_module(library(reif)).
 :- use_module(library(time)).
 :- use_module('../src/prolog_toolkit').
 :- use_module('../src/module_loader').
@@ -35,18 +36,19 @@ find_pl_files(Dir, AllFiles) :-
 
 collect_pl_files([], _, []).
 collect_pl_files([Entry|Entries], Dir, Out) :-
-    (   ( Entry = "." ; Entry = ".." ) ->
-        collect_pl_files(Entries, Dir, Out)
-    ;   append(Dir, "/", Prefix),
-        append(Prefix, Entry, Path),
-        (   directory_exists(Path) ->
-            find_pl_files(Path, SubFiles),
-            collect_pl_files(Entries, Dir, Rest),
-            append(SubFiles, Rest, Out)
-        ;   (   append(_, ".pl", Entry) ->
-                Out = [Path|Rest],
-                collect_pl_files(Entries, Dir, Rest)
-            ;   collect_pl_files(Entries, Dir, Out)
+    if_(memberd_t(Entry, [".", ".."]),
+        collect_pl_files(Entries, Dir, Out),
+        (   append(Dir, "/", Prefix),
+            append(Prefix, Entry, Path),
+            (   directory_exists(Path) ->
+                find_pl_files(Path, SubFiles),
+                collect_pl_files(Entries, Dir, Rest),
+                append(SubFiles, Rest, Out)
+            ;   (   append(_, ".pl", Entry) ->
+                    Out = [Path|Rest],
+                    collect_pl_files(Entries, Dir, Rest)
+                ;   collect_pl_files(Entries, Dir, Out)
+                )
             )
         )
     ).

@@ -117,4 +117,13 @@ make test-tmin
 make test-all TBUFFER=120
 ```
 
+---
+
+## Documentation
+
+- [Architecture & Design](file:///home/doug/code/prolog_toolkit/docs/architecture.md)
+- [Scryer Test Parity & Approximation Guidelines](file:///home/doug/code/prolog_toolkit/docs/scryer_test_parity.md)
+- [Scryer Reference Tracking](file:///home/doug/code/prolog_toolkit/docs/scryer_reference_tracking.md)
+
+
 

@@ -2,8 +2,10 @@
    Unit Tests: Reactive Attributed AST Engine
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
+:- use_module(library(clpz)).
 :- use_module(library(format)).
 :- use_module(library(lists)).
+:- use_module(library(si)).
 
 :- use_module('../src/prolog_reactive_ast').
 :- use_module(testing).
@@ -122,8 +124,8 @@ test_rational_tree_compatibility :-
 
 % 8. Reactive semantic action: constant folding and type inference
 fold_arithmetic(infix(+), [ast_node(L, _), ast_node(R, _)], NewMeta) :-
-    (   integer(L), integer(R) ->
-        Val is L + R,
+    (   integer_si(L), integer_si(R) ->
+        Val #= L + R,
         NewMeta = [inferred_type(integer), folded(Val)]
     ;   NewMeta = [inferred_type(number)]
     ).
