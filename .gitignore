@@ -16,5 +16,8 @@ scratch/
 *.so
 *.dylib
 *.dll
+# Build output & intermediate test artifacts
+build/
+*.scryer_out
 target/
 .test_timings.pl

@@ -672,6 +672,8 @@ module_exported_ops_t(library(clpz), Ops, true) :-
 module_exported_ops_t(clpz, Ops, true) :-
     !,
     clpz_exported_ops(Ops).
+module_exported_ops_t(library(atts), [op(1199, fx, "attribute")], true) :- !.
+module_exported_ops_t(atts, [op(1199, fx, "attribute")], true) :- !.
 module_exported_ops_t(_, [], false).
 
 clpz_exported_ops([

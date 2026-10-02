@@ -1,12 +1,9 @@
 :- module(test_builtins, [
     run_builtins_tests/0,
-    test_2_arithmetic_is/0,
-    test_2_arithmetic_comparison/0,
-    test_2_type_tests/0,
-    test_2_functor_and_arg/0,
-    test_2_univ/0,
-    test_2_chars_conversion/0,
-    test_2_pure_dif/0
+    run_builtins_tests/1,
+    generate_scryer_out/0,
+    generate_scryer_out/1,
+    test_builtins_case/4
 ]).
 
 /** <module> Scryer Compatibility: Absorbed & Core Builtin Predicates
@@ -16,50 +13,26 @@ type predicates, functor/arg/univ decomposition, and char list conversions.
 */
 
 :- use_module(library(format)).
+:- use_module(library(dif)).
 :- use_module(compat_framework).
 
-test_2_arithmetic_is :-
-    assert_scryer_crowlog_compat("X is 2 * 3 + 4.", ["X = 10"]).
+test_builtins_case(arithmetic_is, "arithmetic evaluation (is/2)", "", ["X is 2 * 3 + 4."]).
+test_builtins_case(arithmetic_comparison, "arithmetic comparisons (>, =<, =:=)", "", ["10 > 5, 3 =< 3, 4 =:= 2 + 2."]).
+test_builtins_case(type_tests, "metalogical type tests (var, atom, integer, etc.)", "", ["var(X), nonvar(foo), atom(bar), integer(42), float(3.14), compound(f(1))."]).
+test_builtins_case(functor_and_arg, "functor/3 and arg/3 decomposition", "", ["functor(f(a, b, c), F, N), arg(2, f(a, b, c), Arg)."]).
+test_builtins_case(univ, "univ (=../2) term construction", "", ["Term =.. [foo, 1, 2, bar]."]).
+test_builtins_case(chars_conversion, "atom_chars/2 and number_chars/2 ISO char lists", "", ["atom_chars(hello, Cs), number_chars(123, Ns)."]).
+test_builtins_case(pure_dif, "dif/2 pure constraint", "", ["dif(X, a), X = b."]).
 
-test_2_arithmetic_comparison :-
-    assert_scryer_crowlog_compat("10 > 5, 3 =< 3, 4 =:= 2 + 2.", ["true."]).
+generate_scryer_out(OutFile) :-
+    generate_scryer_out_file(test_builtins:test_builtins_case, OutFile).
+generate_scryer_out :-
+    default_scryer_out_path(test_builtins, OutFile),
+    generate_scryer_out(OutFile).
 
-test_2_type_tests :-
-    assert_scryer_crowlog_compat("var(X), nonvar(foo), atom(bar), integer(42), float(3.14), compound(f(1)).", [
-        "true."
-    ]).
-
-test_2_functor_and_arg :-
-    assert_scryer_crowlog_compat("functor(f(a, b, c), F, N), arg(2, f(a, b, c), Arg).", [
-        "F = f",
-        "N = 3",
-        "Arg = b"
-    ]).
-
-test_2_univ :-
-    assert_scryer_crowlog_compat("Term =.. [foo, 1, 2, bar].", [
-        "Term = foo(1,2,bar)"
-    ]).
-
-test_2_chars_conversion :-
-    assert_scryer_crowlog_compat("atom_chars(hello, Cs), number_chars(123, Ns).", [
-        "Cs = [h,e,l,l,o]",
-        "Ns = ['1','2','3']"
-    ]).
-
-test_2_pure_dif :-
-    assert_scryer_crowlog_compat("dif(X, a), X = b.", [
-        "X = b"
-    ]).
-
-run_builtins_tests :-
+run_builtins_tests(OutFile) :-
     format("~n--- Tier 2: Core Builtins Compatibility ---~n", []),
-    run_compat_test("arithmetic evaluation (is/2)", test_builtins:test_2_arithmetic_is),
-    run_compat_test("arithmetic comparisons (>, =<, =:=)", test_builtins:test_2_arithmetic_comparison),
-    run_compat_test("metalogical type tests (var, atom, integer, etc.)", test_builtins:test_2_type_tests),
-    run_compat_test("functor/3 and arg/3 decomposition", test_builtins:test_2_functor_and_arg),
-    run_compat_test("univ (=../2) term construction", test_builtins:test_2_univ),
-    run_compat_test("atom_chars/2 and number_chars/2 ISO char lists", test_builtins:test_2_chars_conversion),
-    run_compat_test("dif/2 pure constraint", test_builtins:test_2_pure_dif).
-
-:- initialization(run_builtins_tests).
+    run_compat_tests_from_file(test_builtins:test_builtins_case, OutFile).
+run_builtins_tests :-
+    default_scryer_out_path(test_builtins, OutFile),
+    run_builtins_tests(OutFile).

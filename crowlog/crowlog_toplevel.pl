@@ -7,6 +7,8 @@
     crowlog_eval_query/4,
     crowlog_consult/3,
     crowlog_consult/4,
+    process_consulted_clauses/4,
+    crowlog_use_module/4,
     resolve_consult_file/2,
     crowlog_library_search_paths/1,
     print_derivation_tree/1,
@@ -40,6 +42,7 @@ Commands:
 :- use_module(library(dif)).
 :- use_module(library(files)).
 :- use_module(library(format)).
+:- use_module(library(lambda)).
 :- use_module(library(lists)).
 :- use_module(library(os)).
 :- use_module(library(reif)).
@@ -291,6 +294,26 @@ is_absorbed_host_module_t(library(clpz), true) :- !.
 is_absorbed_host_module_t(clpz, true) :- !.
 is_absorbed_host_module_t(library(iso_ext), true) :- !.
 is_absorbed_host_module_t(iso_ext, true) :- !.
+is_absorbed_host_module_t(library(loader), true) :- !.
+is_absorbed_host_module_t(loader, true) :- !.
+is_absorbed_host_module_t(library(atts), true) :- !.
+is_absorbed_host_module_t(atts, true) :- !.
+is_absorbed_host_module_t(library(dcgs), true) :- !.
+is_absorbed_host_module_t(dcgs, true) :- !.
+is_absorbed_host_module_t(library(format), true) :- !.
+is_absorbed_host_module_t(format, true) :- !.
+is_absorbed_host_module_t(library(si), true) :- !.
+is_absorbed_host_module_t(si, true) :- !.
+is_absorbed_host_module_t(library(between), true) :- !.
+is_absorbed_host_module_t(between, true) :- !.
+is_absorbed_host_module_t(library(charsio), true) :- !.
+is_absorbed_host_module_t(charsio, true) :- !.
+is_absorbed_host_module_t(library(dif), true) :- !.
+is_absorbed_host_module_t(dif, true) :- !.
+is_absorbed_host_module_t(library(error), true) :- !.
+is_absorbed_host_module_t(error, true) :- !.
+is_absorbed_host_module_t(library(reif), true) :- !.
+is_absorbed_host_module_t(reif, true) :- !.
 is_absorbed_host_module_t(_, false).
 
 %% crowlog_eval_query_interactive(+InStream, +OutStream, +Goal, +VarNames, +State, -Lookahead)
@@ -508,14 +531,45 @@ crowlog_consult(FileSpec, State0, State1) :-
 
 %% crowlog_consult(+FileSpec, +State0, -State1, -MsgChars)
 %  Parses and loads clauses from FileSpec into the KB, returning confirmation chars.
-crowlog_consult(FileSpec, state(kb(KB0), ops(OpT0), opts(Opts)), state(kb(KB1), ops(OpT1), opts(Opts)), MsgChars) :-
+crowlog_consult(FileSpec, State0, State, MsgChars) :-
     resolve_consult_file(FileSpec, PathChars),
-    read_file_to_chars(PathChars, Chars),
-    phrase(prolog_tokens(Tokens), Chars),
-    phrase(prolog_parse_program(OpT0, [expand_mode(pure_dcg)], Clauses, OpT1), Tokens),
-    append(KB0, Clauses, KB1),
-    length(Clauses, N),
-    phrase(toplevel_consult_msg_(PathChars, N), MsgChars).
+    State0 = state(kb(KB0), ops(OpT0), opts(Opts0)),
+    (   member(loaded_file(PathChars), Opts0) ->
+        State = State0,
+        MsgChars = "   true.\n"
+    ;   read_file_to_chars(PathChars, Chars),
+        phrase(prolog_tokens(Tokens), Chars),
+        phrase(prolog_parse_program(OpT0, [expand_mode(pure_dcg)], RawClauses, OpT1), Tokens),
+        process_consulted_clauses(RawClauses, state(kb(KB0), ops(OpT1), opts([loaded_file(PathChars)|Opts0])), State, RegularClauses),
+        length(RegularClauses, N),
+        phrase(toplevel_consult_msg_(PathChars, N), MsgChars)
+    ).
+
+process_consulted_clauses([], State, State, []).
+process_consulted_clauses([Clause|Clauses], State0, State, OutClauses) :-
+    (   ( Clause = directive(Directive, _) ; Clause = (:- Directive) ; Clause = (?- Directive) ) ->
+        process_consult_directive(Directive, State0, State1),
+        process_consulted_clauses(Clauses, State1, State, OutClauses)
+    ;   State0 = state(kb(KB0), ops(Ops), opts(Opts)),
+        append(KB0, [Clause], KB1),
+        State1 = state(kb(KB1), ops(Ops), opts(Opts)),
+        OutClauses = [Clause|RestClauses],
+        process_consulted_clauses(Clauses, State1, State, RestClauses)
+    ).
+
+process_consult_directive(use_module(Spec), State0, State1) :-
+    !,
+    crowlog_use_module(Spec, State0, State1, _).
+process_consult_directive(use_module(Spec, _Imports), State0, State1) :-
+    !,
+    crowlog_use_module(Spec, State0, State1, _).
+process_consult_directive(consult(Spec), State0, State1) :-
+    !,
+    crowlog_consult(Spec, State0, State1, _).
+process_consult_directive([File|Files], State0, State1) :-
+    !,
+    consult_files([File|Files], State0, State1, _).
+process_consult_directive(_, State, State).
 
 resolve_consult_file(library(Lib), ResolvedPath) :-
     !,

@@ -1,1 +1,0 @@
-/home/doug/code/prolog-agent-toolkit/.agents/rules/coding_invariants.md

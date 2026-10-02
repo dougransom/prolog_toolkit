@@ -104,10 +104,17 @@ make test-module-loader
 make test-iso-conformity
 make test-scryer-compat
 
+# Generate Scryer reference output (.scryer_out) intermediate files
+make test-scryer-compat-generate
+
+# Clean generated test outputs and cached timings (forces regeneration on next test run)
+make clean
+
 # Measure baseline minimal probe run time (TMIN)
 make test-tmin
 
 # Run with custom buffer (e.g. 120s on slower CI machines)
 make test-all TBUFFER=120
 ```
+
 

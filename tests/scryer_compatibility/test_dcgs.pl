@@ -1,7 +1,9 @@
 :- module(test_dcgs, [
     run_dcg_tests/0,
-    test_3_basic_dcg/0,
-    test_3_dcg_arguments_and_generation/0
+    run_dcg_tests/1,
+    generate_scryer_out/0,
+    generate_scryer_out/1,
+    test_dcg_case/4
 ]).
 
 /** <module> Scryer Compatibility: Definite Clause Grammars (library(dcgs))
@@ -11,23 +13,34 @@ arguments, and { ExtraGoal } execution via phrase/2,3.
 */
 
 :- use_module(library(format)).
+:- use_module(library(dcgs)).
 :- use_module(compat_framework).
 
-test_3_basic_dcg :-
-    KB = ":- use_module(library(dcgs)).\nnoun --> [cat]. noun --> [dog]. sentence --> noun, [runs].",
-    assert_scryer_crowlog_compat("phrase(sentence, [cat, runs]).", KB, ["true."]),
-    assert_scryer_crowlog_compat("phrase(sentence, [dog, runs]).", KB, ["true."]),
-    assert_scryer_crowlog_compat("phrase(sentence, [fish, runs]).", KB, ["false."]).
+% DCG grammar rules for native Scryer execution
+noun --> [cat].
+noun --> [dog].
+sentence --> noun, [runs].
+expr(N) --> [N], { integer(N) }.
+expr(A + B) --> [A, +], expr(B).
 
-test_3_dcg_arguments_and_generation :-
-    KB = ":- use_module(library(dcgs)).\nexpr(N) --> [N], { integer(N) }. expr(A + B) --> [A, +], expr(B).",
-    assert_scryer_crowlog_compat("phrase(expr(Tree), [1, +, 2]).", KB, [
-        "Tree = 1+2"
+test_dcg_case(dcgs, "DCG terminals, non-terminals, arguments, and curly braces",
+    ":- use_module(library(dcgs)).\nnoun --> [cat]. noun --> [dog]. sentence --> noun, [runs].\nexpr(N) --> [N], { integer(N) }. expr(A + B) --> [A, +], expr(B).",
+    [
+        "phrase(sentence, [cat, runs]).",
+        "phrase(sentence, [dog, runs]).",
+        "phrase(sentence, [fish, runs]).",
+        "phrase(expr(Tree), [1, +, 2])."
     ]).
 
-run_dcg_tests :-
-    format("~n--- Tier 3: Definite Clause Grammars (DCGs) ---~n", []),
-    run_compat_test("basic terminal and non-terminal DCG parsing", test_dcgs:test_3_basic_dcg),
-    run_compat_test("DCG arguments and curly brace extra goals", test_dcgs:test_3_dcg_arguments_and_generation).
+generate_scryer_out(OutFile) :-
+    generate_scryer_out_file(test_dcgs:test_dcg_case, OutFile).
+generate_scryer_out :-
+    default_scryer_out_path(test_dcgs, OutFile),
+    generate_scryer_out(OutFile).
 
-:- initialization(run_dcg_tests).
+run_dcg_tests(OutFile) :-
+    format("~n--- Tier 3: Definite Clause Grammars (DCGs) ---~n", []),
+    run_compat_tests_from_file(test_dcgs:test_dcg_case, OutFile).
+run_dcg_tests :-
+    default_scryer_out_path(test_dcgs, OutFile),
+    run_dcg_tests(OutFile).

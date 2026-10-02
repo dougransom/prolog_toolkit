@@ -84,16 +84,22 @@ default_operator_table(op_table(Ops)) :-
         % Module Qualification (600)
         op( 600, xfy, ":"),
 
-        % Arithmetic Additive & Bitwise (500)
+        % Arithmetic Additive & Bitwise & CLP(B) (500)
         op( 500, yfx, "+"),
         op( 500, yfx, "-"),
         op( 500, yfx, "/\\"),
         op( 500, yfx, "\\/"),
+        op( 500, yfx, "#"),
 
-        % Arithmetic Multiplicative (400)
+        % CLP(B) Negation (300)
+        op( 300,  fy, "~"),
+
+        % Arithmetic Multiplicative & XPath (400)
         op( 400, yfx, "*"),
         op( 400, yfx, "/"),
+        op( 400,  fx, "/"),
         op( 400, yfx, "//"),
+        op( 400,  fx, "//"),
         op( 400, yfx, "rdiv"),
         op( 400, yfx, "div"),
         op( 400, yfx, "rem"),
@@ -101,12 +107,14 @@ default_operator_table(op_table(Ops)) :-
         op( 400, yfx, "<<"),
         op( 400, yfx, ">>"),
 
-        % Power & Bitwise Negation (200)
+        % Power & Bitwise Negation & Lambda & XPath (201, 200)
+        op( 201, xfx, "+\\"),
         op( 200, xfx, "**"),
         op( 200, xfy, "^"),
         op( 200,  fy, "-"),
         op( 200,  fy, "+"),
-        op( 200,  fy, "\\")
+        op( 200,  fy, "\\"),
+        op( 200,  fy, "@")
     ].
 
 %% op_chars(+Op, -Chars)
