@@ -55,6 +55,7 @@ Commands:
 ]).
 :- use_module('../src/prolog_reactive_parser').
 :- use_module('crowlog.pl').
+:- use_module('substrate.pl').
 
 %% initial_toplevel_state(-State)
 %  Initializes an empty toplevel state with default operators and options.
@@ -291,22 +292,12 @@ crowlog_use_module(Spec, State0, State1, OutChars) :-
     ).
 
 is_absorbed_host_module_t(Mod, Truth) :-
-    absorbed_host_modules(Modules),
-    if_(memberd_t(Mod, Modules),
-        Truth = true,
-        if_(Mod = library(Bare),
-            memberd_t(Bare, Modules, Truth),
-            Truth = false
-        )
-    ).
+    default_substrate(SubstrateID),
+    substrate_absorbs_module_t(SubstrateID, Mod, Truth).
 
-absorbed_host_modules([
-    arithmetic, assoc, atts, between, charsio, clpb, clpz, cont,
-    crypto, csv, dcgs, debug, diag, dif, error, files,
-    format, freeze, gensym, iso_ext, lambda, lists, loader, ordsets,
-    os, pairs, pio, process, queues, random, reif, sgml,
-    simplex, si, terms, time, ugraphs, uuid, when, xpath
-]).
+absorbed_host_modules(Modules) :-
+    default_substrate(SubstrateID),
+    substrate_absorbed_modules(SubstrateID, Modules).
 
 %% crowlog_eval_query_interactive(+InStream, +OutStream, +Goal, +VarNames, +State, -Lookahead)
 %  Interactively executes Goal with deterministic vs choicepoint-aware answer formatting.

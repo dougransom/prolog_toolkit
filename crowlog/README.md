@@ -34,7 +34,23 @@ Crowlog strictly distinguishes between modules loaded by the host engine to impl
 | **Term Inspection & Metalogical** | `var/1`, `nonvar/1`, `atom/1`, `integer/1`, `float/1`, `compound/1`, `atomic/1`, `functor/3`, `arg/3`, `=../2`, `atom_chars/2`, `number_chars/2` |
 | **Delimited Control** | `reset/3`, `shift/1` (via `library(cont)`) |
 
-All other predicates and modules (e.g. `pairs`, `assoc`, `lists`, `ordsets`, custom reified library predicates) must be loaded into Crowlog and executed through the interpreter.
+All other predicates and modules (e.g. `pairs`, `assoc`, `lists`, `ordsets`, custom reified library predicates) are intended to be loaded into Crowlog and executed through the interpreter or compiler.
+
+## Extensible Host Substrate & Compiler Bootstrapping Architecture
+
+Crowlog is designed around a **Declarative Substrate Boundary** that facilitates both meta-interpretation and full compiler code generation:
+
+1. **Declarative Substrate Contract**:
+   A backend or target environment specifies which primitives it absorbs (e.g., unification, memory allocation, and basic I/O) versus which predicates are compiled or interpreted.
+
+2. **Abstract Form Emission (IR / WAM / Target Bytecode)**:
+   Crowlog's parser and frontend produce a high-fidelity AST. A compiler backend can translate this AST into an abstract form (e.g., WAM instructions, Python AST/bytecode, WebAssembly, or JavaScript).
+
+3. **Self-Bootstrapping**:
+   A compiler writer targeting a new platform (e.g., Python, JVM, Node.js, WASM) only needs to:
+   - Declare their target's minimal host hooks (the absorbed substrate).
+   - Implement an executor for the emitted abstract form.
+   - Run the compiled Crowlog core and standard libraries (`lists`, `assoc`, `dcgs`, `reif`, etc.) on top of that substrate to achieve a complete, running Prolog system.
 
 ## Environment Variables & Library Search Paths
 
